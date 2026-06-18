@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
+import { aggregateOrderIngredients } from '@/utils/costing'
 import {
   TrendingUp,
   Beef,
@@ -16,6 +17,9 @@ import {
 } from 'lucide-react'
 
 interface Ingredient {
+  id: string
+  name: string
+  unit: string
   cost_per_unit: number
 }
 
@@ -27,11 +31,11 @@ interface DishIngredient {
 interface Dish {
   id: string
   name: string
+  category: string
   dish_ingredients: DishIngredient[]
 }
 
 interface OrderDish {
-  portions: number
   dishes: Dish
 }
 
@@ -40,6 +44,7 @@ interface Order {
   client_name: string
   event_date: string
   status: string
+  portions: number
   order_dishes: OrderDish[]
 }
 
@@ -49,6 +54,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null)
   
   const [orders, setOrders] = useState<Order[]>([])
+  const [ingredientsCatalog, setIngredientsCatalog] = useState<any[]>([])
   const [totalIngredients, setTotalIngredients] = useState(0)
   const [totalDishes, setTotalDishes] = useState(0)
 
@@ -57,7 +63,7 @@ export default function DashboardPage() {
       try {
         setLoading(true)
         
-        // Fetch orders with all nested dish and ingredient data for cost calculation
+        // Fetch orders with all nested dish and ingredient data
         const { data: ordersData, error: ordersError } = await supabase
           .from('orders')
           .select(`
@@ -65,14 +71,18 @@ export default function DashboardPage() {
             client_name,
             event_date,
             status,
+            portions,
             order_dishes (
-              portions,
               dishes (
                 id,
                 name,
+                category,
                 dish_ingredients (
                   quantity,
                   ingredients (
+                    id,
+                    name,
+                    unit,
                     cost_per_unit
                   )
                 )
@@ -92,6 +102,14 @@ export default function DashboardPage() {
           .from('dishes')
           .select('*', { count: 'exact', head: true })
 
+        // Fetch ingredients catalog
+        const { data: ingData, error: ingError } = await supabase
+          .from('ingredients')
+          .select('id, name, unit, cost_per_unit')
+
+        if (ingError) throw ingError
+        setIngredientsCatalog(ingData || [])
+
         setOrders(ordersData as unknown as Order[] || [])
         setTotalIngredients(ingredientCount || 0)
         setTotalDishes(dishCount || 0)
@@ -108,25 +126,15 @@ export default function DashboardPage() {
 
   // Helpers to calculate costing
   const calculateOrderCost = (order: Order) => {
-    let total = 0
-    if (!order.order_dishes) return 0
-    
-    order.order_dishes.forEach((od) => {
-      if (!od.dishes || !od.dishes.dish_ingredients) return
-      
-      let dishCost = 0
-      od.dishes.dish_ingredients.forEach((di) => {
-        const cost = Number(di.ingredients?.cost_per_unit || 0)
-        const qty = Number(di.quantity || 0)
-        dishCost += qty * cost
-      })
-      total += dishCost * od.portions
-    })
-    return total
+    return aggregateOrderIngredients(
+      order.order_dishes,
+      order.portions || 10,
+      ingredientsCatalog
+    ).grandTotal
   }
 
   // Analytics Calculations
-  const confirmedOrders = orders.filter((o) => o.status === 'Confirmed' || o.status === 'Completed')
+  const confirmedOrders = orders.filter((o) => o.status === 'Confirmed' || o.status === 'Completed' || o.status === 'Paid')
   const totalCostConfirmed = confirmedOrders.reduce((sum, o) => sum + calculateOrderCost(o), 0)
 
   // Top 3 Dishes by portions ordered
@@ -142,7 +150,7 @@ export default function DashboardPage() {
         if (!dishPortionsMap[dishId]) {
           dishPortionsMap[dishId] = { name: dishName, portions: 0 }
         }
-        dishPortionsMap[dishId].portions += od.portions
+        dishPortionsMap[dishId].portions += (order.portions || 10)
       })
     })
 
@@ -159,6 +167,7 @@ export default function DashboardPage() {
       case 'Draft': return 'טיוטה'
       case 'Confirmed': return 'מאושר'
       case 'Completed': return 'הושלם'
+      case 'Paid': return 'שולם'
       default: return status
     }
   }
@@ -167,7 +176,7 @@ export default function DashboardPage() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center min-h-[50vh]" dir="rtl">
         <Loader2 className="h-10 w-10 text-amber-500 animate-spin mb-4" />
-        <p className="text-zinc-455 text-zinc-400 text-sm font-medium">טוען נתוני לוח בקרה...</p>
+        <p className="text-zinc-400 text-sm font-medium font-sans">טוען נתוני לוח בקרה...</p>
       </div>
     )
   }
@@ -201,9 +210,9 @@ export default function DashboardPage() {
           <div className="absolute top-0 left-0 p-4 opacity-10">
             <DollarSign className="h-16 w-16 text-amber-500" />
           </div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1">עלות אירועים מאושרים</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1">עלות אירועים מאושרים / שולמו</p>
           <h3 className="text-2xl font-black text-white">₪{totalCostConfirmed.toFixed(2)}</h3>
-          <p className="text-xs text-emerald-450 text-emerald-400 mt-2 flex items-center gap-1 font-medium justify-start">
+          <p className="text-xs text-emerald-400 mt-2 flex items-center gap-1 font-medium justify-start">
             <TrendingUp className="h-3 w-3" />
             מתוך {confirmedOrders.length} אירועים פעילים
           </p>
@@ -261,7 +270,7 @@ export default function DashboardPage() {
           <div className="flex-1 space-y-4">
             {upcomingOrders.length === 0 ? (
               <div className="text-center py-10 border border-dashed border-zinc-800 rounded-xl">
-                <p className="text-zinc-550 text-zinc-500 text-sm">אין אירועים קרובים מתוכננים במערכת.</p>
+                <p className="text-zinc-500 text-sm font-medium">אין אירועים קרובים מתוכננים במערכת.</p>
                 <Link
                   href="/orders/new"
                   className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-xs font-bold text-white rounded-lg transition-all"
@@ -272,7 +281,6 @@ export default function DashboardPage() {
             ) : (
               upcomingOrders.map((order) => {
                 const orderCost = calculateOrderCost(order)
-                const totalPortions = order.order_dishes?.reduce((sum, od) => sum + od.portions, 0) || 0
                 return (
                   <div
                     key={order.id}
@@ -290,21 +298,23 @@ export default function DashboardPage() {
                           })}
                         </span>
                         <span>•</span>
-                        <span>{totalPortions} מנות מתוכננות</span>
+                        <span>{order.portions} מנות מתוכננות</span>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between sm:justify-end gap-6">
                       <div className="text-left">
                         <span className="block text-xxs text-zinc-500 font-semibold uppercase">עלות רכיבים מוערכת</span>
-                        <span className="text-sm font-bold text-amber-500">₪{orderCost.toFixed(2)}</span>
+                        <span className="text-sm font-bold text-amber-500 font-mono">₪{orderCost.toFixed(2)}</span>
                       </div>
 
                       <div className="flex items-center gap-3">
                         <span
-                          className={`inline-block px-2.5 py-1 rounded-full text-xxs font-extrabold uppercase tracking-wide ${
+                          className={`inline-block px-2.5 py-1 rounded-full text-xxs font-extrabold uppercase tracking-wide border ${
                             order.status === 'Completed'
                               ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                              : order.status === 'Paid'
+                              ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
                               : order.status === 'Confirmed'
                               ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                               : 'bg-zinc-900/50 text-zinc-400 border border-zinc-800'
@@ -341,7 +351,7 @@ export default function DashboardPage() {
 
             <div className="space-y-4">
               {topDishes.length === 0 ? (
-                <p className="text-zinc-550 text-zinc-500 text-sm py-4 text-center">טרם בוצעו הזמנות.</p>
+                <p className="text-zinc-550 text-zinc-500 text-sm py-4 text-center font-medium">טרם בוצעו הזמנות.</p>
               ) : (
                 topDishes.map((dish, i) => (
                   <div key={dish.name} className="flex items-center gap-4 p-3 bg-black/40 border border-zinc-900 rounded-xl">

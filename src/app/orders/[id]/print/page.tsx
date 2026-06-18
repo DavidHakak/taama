@@ -21,6 +21,9 @@ interface PageProps {
 }
 
 interface Ingredient {
+  id: string
+  name: string
+  unit: string
   cost_per_unit: number
 }
 
@@ -31,11 +34,11 @@ interface DishIngredient {
 
 interface Dish {
   name: string
+  category: string
   dish_ingredients: DishIngredient[]
 }
 
 interface OrderDish {
-  portions: number
   dishes: Dish
 }
 
@@ -44,6 +47,7 @@ interface Order {
   client_name: string
   event_date: string
   status: string
+  portions: number
   order_dishes: OrderDish[]
 }
 
@@ -56,11 +60,14 @@ export default function PrintOrderPage({ params }: PageProps) {
   const [error, setError] = useState<string | null>(null)
 
   const [order, setOrder] = useState<Order | null>(null)
+  const [ingredientsCatalog, setIngredientsCatalog] = useState<any[]>([])
 
   useEffect(() => {
     async function loadOrder() {
       try {
         setLoading(true)
+        
+        // Fetch order details
         const { data, error: fetchError } = await supabase
           .from('orders')
           .select(`
@@ -68,10 +75,11 @@ export default function PrintOrderPage({ params }: PageProps) {
             client_name,
             event_date,
             status,
+            portions,
             order_dishes (
-              portions,
               dishes (
                 name,
+                category,
                 dish_ingredients (
                   quantity,
                   ingredients (
@@ -89,6 +97,15 @@ export default function PrintOrderPage({ params }: PageProps) {
 
         if (fetchError) throw fetchError
         setOrder(data as unknown as Order)
+
+        // Fetch ingredients catalog
+        const { data: ingredientsData, error: ingredientsError } = await supabase
+          .from('ingredients')
+          .select('id, name, unit, cost_per_unit')
+
+        if (ingredientsError) throw ingredientsError
+        setIngredientsCatalog(ingredientsData || [])
+
       } catch (err: unknown) {
         console.error('Error loading order for printing:', err)
         setError(err instanceof Error ? err.message : 'שגיאה בטעינת נתוני ההזמנה')
@@ -105,6 +122,7 @@ export default function PrintOrderPage({ params }: PageProps) {
       case 'Draft': return 'טיוטה'
       case 'Confirmed': return 'מאושר'
       case 'Completed': return 'הושלם'
+      case 'Paid': return 'שולם'
       default: return status
     }
   }
@@ -151,7 +169,11 @@ export default function PrintOrderPage({ params }: PageProps) {
   }
 
   // Calculate scaled costing using utility
-  const { ingredients: aggregatedIngredients, grandTotal } = aggregateOrderIngredients(order.order_dishes)
+  const { ingredients: aggregatedIngredients, grandTotal } = aggregateOrderIngredients(
+    order.order_dishes,
+    order.portions || 10,
+    ingredientsCatalog
+  )
 
   return (
     <div className="min-h-screen bg-black text-zinc-100 print:bg-white print:text-black font-sans" dir="rtl">
@@ -209,7 +231,7 @@ export default function PrintOrderPage({ params }: PageProps) {
             <h3 className="text-xxs font-black uppercase tracking-widest text-amber-500 print:text-black">פרטי הלקוח</h3>
             <div className="flex items-center gap-2 justify-start">
               <User className="h-4.5 w-4.5 text-zinc-500 print:text-black" />
-              <span className="font-bold text-lg text-zinc-105 text-zinc-100 print:text-black">{order.client_name}</span>
+              <span className="font-bold text-lg text-zinc-100 print:text-black">{order.client_name}</span>
             </div>
           </div>
 
@@ -253,7 +275,7 @@ export default function PrintOrderPage({ params }: PageProps) {
                 {order.order_dishes?.map((od, idx) => (
                   <tr key={idx} className="hover:bg-zinc-900/10">
                     <td className="py-3.5 px-6 font-bold text-zinc-100 print:text-black">{od.dishes?.name}</td>
-                    <td className="py-3.5 px-6 text-left font-mono font-bold text-zinc-300 print:text-black">{od.portions} מנות</td>
+                    <td className="py-3.5 px-6 text-left font-mono font-bold text-zinc-300 print:text-black">{order.portions} מנות</td>
                   </tr>
                 ))}
               </tbody>
@@ -282,7 +304,7 @@ export default function PrintOrderPage({ params }: PageProps) {
                   <tr key={item.ingredientId} className="hover:bg-zinc-900/10">
                     <td className="py-3.5 px-6 font-bold text-zinc-100 print:text-black">{item.ingredientName}</td>
                     <td className="py-3.5 px-6 text-left font-mono font-semibold text-zinc-300 print:text-black">
-                      {item.totalQuantity.toFixed(3)} {getUnitLabel(item.unit)}
+                      {item.totalQuantity.toFixed(2)} {getUnitLabel(item.unit)}
                     </td>
                     <td className="py-3.5 px-6 text-left font-mono font-bold text-amber-500 print:text-black">
                       ₪{item.totalCost.toFixed(2)}

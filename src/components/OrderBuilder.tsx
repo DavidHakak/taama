@@ -24,6 +24,7 @@ import Link from 'next/link'
 interface Dish {
   id: string
   name: string
+  category: string
   dish_ingredients: {
     quantity: number
     ingredients: {
@@ -41,7 +42,6 @@ interface OrderBuilderProps {
 
 interface SelectedDishItem {
   dishId: string
-  portions: number
 }
 
 export default function OrderBuilder({ orderId }: OrderBuilderProps) {
@@ -52,11 +52,13 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
   const [error, setError] = useState<string | null>(null)
   
   const [dishesList, setDishesList] = useState<Dish[]>([])
+  const [ingredientsCatalog, setIngredientsCatalog] = useState<any[]>([])
   
   // Form States
   const [clientName, setClientName] = useState('')
   const [eventDate, setEventDate] = useState('')
   const [status, setStatus] = useState('Draft')
+  const [portions, setPortions] = useState<number>(10)
   const [selectedDishes, setSelectedDishes] = useState<SelectedDishItem[]>([])
   const [saving, setSaving] = useState(false)
 
@@ -75,6 +77,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
           .select(`
             id,
             name,
+            category,
             dish_ingredients (
               quantity,
               ingredients (
@@ -90,6 +93,14 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
         if (dishesError) throw dishesError
         setDishesList(dishesData as unknown as Dish[] || [])
 
+        // Fetch ingredients catalog
+        const { data: ingredientsData, error: ingredientsError } = await supabase
+          .from('ingredients')
+          .select('id, name, unit, cost_per_unit')
+
+        if (ingredientsError) throw ingredientsError
+        setIngredientsCatalog(ingredientsData || [])
+
         // 2. If editing, fetch the order and its selected dishes
         if (orderId) {
           const { data: orderData, error: orderError } = await supabase
@@ -99,9 +110,9 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
               client_name,
               event_date,
               status,
+              portions,
               order_dishes (
-                dish_id,
-                portions
+                dish_id
               )
             `)
             .eq('id', orderId)
@@ -112,16 +123,17 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
           setClientName(orderData.client_name)
           setEventDate(orderData.event_date)
           setStatus(orderData.status)
+          setPortions(orderData.portions || 10)
 
           const mappedDishes = orderData.order_dishes?.map((od: any) => ({
             dishId: od.dish_id,
-            portions: od.portions,
           })) || []
 
           setSelectedDishes(mappedDishes)
         } else {
           // New order defaults: add an empty item
-          setSelectedDishes([{ dishId: '', portions: 10 }])
+          setSelectedDishes([{ dishId: '' }])
+          setPortions(10)
         }
       } catch (err: unknown) {
         console.error('Error initializing Order Builder:', err)
@@ -142,36 +154,31 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
       .map((sd) => {
         const fullDish = dishesList.find((d) => d.id === sd.dishId)
         return {
-          portions: sd.portions,
           dishes: fullDish,
         }
       })
 
-    return aggregateOrderIngredients(mockOrderDishes)
+    return aggregateOrderIngredients(mockOrderDishes, portions, ingredientsCatalog)
   }
 
   const { ingredients: aggregatedIngredients, grandTotal } = getDynamicCostDetails()
 
   // Add a dish row
   const addDishRow = () => {
-    setSelectedDishes([...selectedDishes, { dishId: '', portions: 10 }])
+    setSelectedDishes([...selectedDishes, { dishId: '' }])
   }
 
   // Remove a dish row
   const removeDishRow = (index: number) => {
     const newDishes = [...selectedDishes]
     newDishes.splice(index, 1)
-    setSelectedDishes(newDishes.length > 0 ? newDishes : [{ dishId: '', portions: 10 }])
+    setSelectedDishes(newDishes.length > 0 ? newDishes : [{ dishId: '' }])
   }
 
   // Update selected dish item
   const updateDishRow = (index: number, field: keyof SelectedDishItem, value: string | number) => {
     const newDishes = [...selectedDishes]
-    if (field === 'portions') {
-      newDishes[index].portions = Math.max(1, Number(value) || 0)
-    } else {
-      newDishes[index].dishId = value as string
-    }
+    newDishes[index].dishId = value as string
     setSelectedDishes(newDishes)
   }
 
@@ -193,9 +200,15 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
       return
     }
 
-    const validDishes = selectedDishes.filter((sd) => sd.dishId && sd.portions > 0)
+    if (!portions || portions <= 0) {
+      setError('מספר המנות הכולל חייב להיות גדול מ-0')
+      setSaving(false)
+      return
+    }
+
+    const validDishes = selectedDishes.filter((sd) => sd.dishId)
     if (validDishes.length === 0) {
-      setError('יש לבחור לפחות מנה אחת עם כמות מנות חיובית')
+      setError('יש לבחור לפחות מנה אחת')
       setSaving(false)
       return
     }
@@ -213,6 +226,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
             client_name: clientName,
             event_date: eventDate,
             status: status,
+            portions: portions,
           })
           .eq('id', orderId)
 
@@ -234,6 +248,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
               client_name: clientName,
               event_date: eventDate,
               status: status,
+              portions: portions,
               user_id: user?.id || null,
             },
           ])
@@ -248,7 +263,6 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
       const mappedOrderDishes = validDishes.map((sd) => ({
         order_id: finalOrderId!,
         dish_id: sd.dishId,
-        portions: sd.portions,
       }))
 
       const { error: insertDishesError } = await supabase
@@ -326,7 +340,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
           <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 shadow-xl space-y-5">
             <h2 className="text-sm font-bold uppercase tracking-wider text-amber-400">פרטי האירוע</h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="md:col-span-2">
                 <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
                   שם הלקוח / האירוע
@@ -359,17 +373,35 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                   />
                 </div>
               </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                  מספר מנות כולל
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={portions || ''}
+                    onChange={(e) => setPortions(Math.max(1, Number(e.target.value) || 0))}
+                    placeholder="כמות מנות"
+                    className="w-full px-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none text-right font-semibold"
+                  />
+                </div>
+              </div>
             </div>
 
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2 font-sans">
                 סטטוס אירוע
               </label>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {[
                   { label: 'טיוטה', value: 'Draft' },
                   { label: 'מאושר', value: 'Confirmed' },
-                  { label: 'הושלם', value: 'Completed' }
+                  { label: 'הושלם', value: 'Completed' },
+                  { label: 'שולם', value: 'Paid' }
                 ].map((opt) => {
                   const isSelected = status === opt.value
                   return (
@@ -414,7 +446,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                       return sum + Number(di.ingredients?.cost_per_unit || 0) * Number(di.quantity || 0)
                     }, 0) || 0
                   : 0
-                const rowTotalCost = dishCost * item.portions
+                const rowTotalCostScaled = dishCost * portions
 
                 return (
                   <div
@@ -496,26 +528,11 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                       )}
                     </div>
 
-                    {/* Portions input */}
-                    <div className="w-full sm:w-36 flex items-center bg-zinc-950 border border-zinc-900 rounded-lg px-2 shrink-0">
-                      <input
-                        type="number"
-                        min="1"
-                        required
-                        placeholder="כמות מנות"
-                        value={item.portions || ''}
-                        onChange={(e) => updateDishRow(idx, 'portions', e.target.value)}
-                        className="w-full bg-transparent border-none py-2 px-1 text-left text-sm text-white focus:outline-none"
-                      />
-                      <span className="text-zinc-500 text-xs font-semibold mr-1 shrink-0 bg-zinc-900 px-2 py-0.5 rounded-md flex items-center gap-1">
-                        מנות
-                      </span>
-                    </div>
-
                     {/* Costing breakdown */}
-                    <div className="w-24 text-left flex items-center justify-start font-mono text-sm shrink-0">
+                    <div className="w-32 text-left flex items-center justify-start font-mono text-sm shrink-0">
                       <span className="text-zinc-500 text-xs ml-1">₪</span>
-                      <span className="font-bold text-amber-500">{rowTotalCost.toFixed(2)}</span>
+                      <span className="font-bold text-amber-500">{rowTotalCostScaled.toFixed(2)}</span>
+                      <span className="text-zinc-500 text-xxs mr-1">({portions} מנות)</span>
                     </div>
 
                     {/* Remove row button */}

@@ -31,6 +31,7 @@ export const orders = pgTable('orders', {
   client_name: text('client_name').notNull(),
   event_date: date('event_date').notNull(),
   status: text('status').notNull().default('Draft'),
+  portions: integer('portions').notNull().default(10),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   user_id: uuid('user_id'),
 })
@@ -43,7 +44,6 @@ export const orderDishes = pgTable('order_dishes', {
   dish_id: uuid('dish_id')
     .references(() => dishes.id, { onDelete: 'cascade' })
     .notNull(),
-  portions: integer('portions').notNull().default(1),
 })
 
 export const profiles = pgTable('profiles', {

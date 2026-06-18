@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
+import { aggregateOrderIngredients } from '@/utils/costing'
 import {
   ClipboardList,
   Plus,
@@ -17,6 +18,9 @@ import {
 } from 'lucide-react'
 
 interface Ingredient {
+  id: string
+  name: string
+  unit: string
   cost_per_unit: number
 }
 
@@ -27,11 +31,11 @@ interface DishIngredient {
 
 interface Dish {
   name: string
+  category: string
   dish_ingredients: DishIngredient[]
 }
 
 interface OrderDish {
-  portions: number
   dishes: Dish
 }
 
@@ -40,6 +44,7 @@ interface Order {
   client_name: string
   event_date: string
   status: string
+  portions: number
   created_at: string
   order_dishes: OrderDish[]
 }
@@ -50,11 +55,14 @@ export default function OrdersPage() {
   const [error, setError] = useState<string | null>(null)
   
   const [orders, setOrders] = useState<Order[]>([])
+  const [ingredientsCatalog, setIngredientsCatalog] = useState<any[]>([])
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
   const fetchOrders = async () => {
     try {
       setLoading(true)
+      
+      // Fetch orders with nested dish & ingredient data
       const { data, error: fetchError } = await supabase
         .from('orders')
         .select(`
@@ -62,14 +70,18 @@ export default function OrdersPage() {
           client_name,
           event_date,
           status,
+          portions,
           created_at,
           order_dishes (
-            portions,
             dishes (
               name,
+              category,
               dish_ingredients (
                 quantity,
                 ingredients (
+                  id,
+                  name,
+                  unit,
                   cost_per_unit
                 )
               )
@@ -80,6 +92,15 @@ export default function OrdersPage() {
 
       if (fetchError) throw fetchError
       setOrders(data as unknown as Order[] || [])
+
+      // Fetch ingredients catalog
+      const { data: ingData, error: ingError } = await supabase
+        .from('ingredients')
+        .select('id, name, unit, cost_per_unit')
+
+      if (ingError) throw ingError
+      setIngredientsCatalog(ingData || [])
+
     } catch (err: unknown) {
       console.error('Error fetching orders:', err)
       setError(err instanceof Error ? err.message : 'שגיאה בטעינת הזמנות')
@@ -94,21 +115,11 @@ export default function OrdersPage() {
 
   // Helpers to calculate costing
   const calculateOrderCost = (order: Order) => {
-    let total = 0
-    if (!order.order_dishes) return 0
-    
-    order.order_dishes.forEach((od) => {
-      if (!od.dishes || !od.dishes.dish_ingredients) return
-      
-      let dishCost = 0
-      od.dishes.dish_ingredients.forEach((di) => {
-        const cost = Number(di.ingredients?.cost_per_unit || 0)
-        const qty = Number(di.quantity || 0)
-        dishCost += qty * cost
-      })
-      total += dishCost * od.portions
-    })
-    return total
+    return aggregateOrderIngredients(
+      order.order_dishes,
+      order.portions || 10,
+      ingredientsCatalog
+    ).grandTotal
   }
 
   // Delete Order
@@ -144,6 +155,7 @@ export default function OrdersPage() {
       case 'Draft': return 'טיוטה'
       case 'Confirmed': return 'מאושר'
       case 'Completed': return 'הושלם'
+      case 'Paid': return 'שולם'
       default: return status
     }
   }
@@ -181,7 +193,7 @@ export default function OrdersPage() {
       {/* Filters Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-zinc-950 p-4 border border-zinc-900 rounded-2xl text-right">
         <div className="flex items-center gap-2">
-          <Filter className="h-4.5 w-4.5 text-zinc-550 text-zinc-500" />
+          <Filter className="h-4.5 w-4.5 text-zinc-500" />
           <span className="text-xs font-semibold uppercase text-zinc-400 tracking-wider">סינון לפי סטטוס:</span>
         </div>
 
@@ -190,7 +202,8 @@ export default function OrdersPage() {
             { label: 'הכל', value: 'all' },
             { label: 'טיוטה', value: 'draft' },
             { label: 'מאושר', value: 'confirmed' },
-            { label: 'הושלם', value: 'completed' }
+            { label: 'הושלם', value: 'completed' },
+            { label: 'שולם', value: 'paid' }
           ].map((status) => {
             const isSelected = statusFilter === status.value
             return (
@@ -229,7 +242,7 @@ export default function OrdersPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-right border-collapse">
               <thead>
-                <tr className="border-b border-zinc-900 bg-black/45 bg-black/40 text-zinc-400 text-xs font-bold uppercase tracking-wider">
+                <tr className="border-b border-zinc-900 bg-black/40 text-zinc-400 text-xs font-bold uppercase tracking-wider">
                   <th className="py-4.5 px-6">שם לקוח / אירוע</th>
                   <th className="py-4.5 px-6">תאריך אירוע</th>
                   <th className="py-4.5 px-6">כמות מנות</th>
@@ -241,7 +254,6 @@ export default function OrdersPage() {
               <tbody className="divide-y divide-zinc-900 text-zinc-300 text-sm">
                 {filteredOrders.map((order) => {
                   const cost = calculateOrderCost(order)
-                  const portions = order.order_dishes?.reduce((sum, od) => sum + od.portions, 0) || 0
 
                   return (
                     <tr key={order.id} className="hover:bg-zinc-900/20 transition-colors">
@@ -260,12 +272,14 @@ export default function OrdersPage() {
                           })}
                         </span>
                       </td>
-                      <td className="py-5 px-6 font-semibold text-zinc-300">{portions} מנות</td>
+                      <td className="py-5 px-6 font-semibold text-zinc-300">{order.portions} מנות</td>
                       <td className="py-5 px-6">
                         <span
                           className={`inline-block px-2.5 py-1 rounded-full text-xxs font-extrabold uppercase tracking-wide border ${
                             order.status === 'Completed'
                               ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                              : order.status === 'Paid'
+                              ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
                               : order.status === 'Confirmed'
                               ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                               : 'bg-zinc-900/50 text-zinc-400 border-zinc-800'
