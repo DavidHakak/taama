@@ -22,7 +22,17 @@ interface Ingredient {
   name: string
   unit: string
   cost_per_unit: number
+  category?: string
 }
+
+const INGREDIENT_CATEGORIES = [
+  "ירקות ופירות",
+  "בשרים ודגים",
+  "תבלינים",
+  "מוצרים יבשים/מזווה",
+  "מוצרי חלב",
+  "אחר"
+]
 
 interface DishIngredient {
   id?: string
@@ -620,33 +630,46 @@ export default function DishesPage() {
                                   className="w-full px-3 py-2 bg-black border border-zinc-900 rounded-lg text-white text-xs placeholder-zinc-600 focus:border-amber-500 outline-none text-right"
                                   autoFocus
                                 />
-                                <div className="flex-1 overflow-y-auto space-y-0.5 pr-1">
+                                <div className="flex-1 overflow-y-auto space-y-3 pr-1">
                                   {filteredOptions.length === 0 ? (
                                     <p className="text-xxs text-zinc-600 py-3.5 text-center">לא נמצאו חומרי גלם</p>
                                   ) : (
-                                    filteredOptions.map((i) => {
-                                      const isSelected = i.id === line.ingredientId
-                                      return (
-                                        <button
-                                          key={i.id}
-                                          type="button"
-                                          onClick={() => {
-                                            updateLineItem(idx, 'ingredientId', i.id)
-                                            setActiveDropdown(null)
-                                          }}
-                                          className={`w-full text-right px-3 py-2 text-xs rounded-lg transition-colors cursor-pointer flex justify-between items-center ${
-                                            isSelected
-                                              ? 'bg-amber-500/10 text-amber-400 font-black'
-                                              : 'text-zinc-300 hover:bg-zinc-900/60'
-                                          }`}
-                                        >
-                                          <span>{i.name}</span>
-                                          <span className="text-xxs text-zinc-500 shrink-0 font-mono">
-                                            ₪{Number(i.cost_per_unit).toFixed(2)}/{getUnitLabel(i.unit)}
-                                          </span>
-                                        </button>
-                                      )
-                                    })
+                                    <>
+                                      {INGREDIENT_CATEGORIES.map((cat) => {
+                                        const catIngs = filteredOptions.filter(i => (i.category || 'אחר') === cat)
+                                        if (catIngs.length === 0) return null
+                                        return (
+                                          <div key={cat} className="space-y-1">
+                                            <span className="block text-[10px] font-black text-amber-500/80 px-2 py-0.5 bg-zinc-900/40 rounded border border-zinc-900/30">
+                                              {cat}
+                                            </span>
+                                            {catIngs.map((i) => {
+                                              const isSelected = i.id === line.ingredientId
+                                              return (
+                                                <button
+                                                  key={i.id}
+                                                  type="button"
+                                                  onClick={() => {
+                                                    updateLineItem(idx, 'ingredientId', i.id)
+                                                    setActiveDropdown(null)
+                                                  }}
+                                                  className={`w-full text-right px-3 py-2 text-xs rounded-lg transition-colors cursor-pointer flex justify-between items-center ${
+                                                    isSelected
+                                                      ? 'bg-amber-500/10 text-amber-400 font-black'
+                                                      : 'text-zinc-300 hover:bg-zinc-900/60'
+                                                  }`}
+                                                >
+                                                  <span>{i.name}</span>
+                                                  <span className="text-xxs text-zinc-500 shrink-0 font-mono">
+                                                    ₪{Number(i.cost_per_unit).toFixed(2)}/{getUnitLabel(i.unit)}
+                                                  </span>
+                                                </button>
+                                              )
+                                            })}
+                                          </div>
+                                        )
+                                      })}
+                                    </>
                                   )}
                                 </div>
                               </div>

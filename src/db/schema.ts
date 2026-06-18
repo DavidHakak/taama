@@ -5,6 +5,7 @@ export const ingredients = pgTable('ingredients', {
   name: text('name').notNull(),
   unit: text('unit').notNull(),
   cost_per_unit: numeric('cost_per_unit', { precision: 10, scale: 2 }).notNull().default('0.00'),
+  category: text('category').notNull().default('אחר'),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
 

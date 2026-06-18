@@ -21,8 +21,18 @@ interface Ingredient {
   name: string
   unit: string
   cost_per_unit: number
+  category: string
   created_at: string
 }
+
+const INGREDIENT_CATEGORIES = [
+  "ירקות ופירות",
+  "בשרים ודגים",
+  "תבלינים",
+  "מוצרים יבשים/מזווה",
+  "מוצרי חלב",
+  "אחר"
+]
 
 export default function IngredientsPage() {
   const supabase = createClient()
@@ -39,6 +49,7 @@ export default function IngredientsPage() {
   const [formName, setFormName] = useState('')
   const [formUnit, setFormUnit] = useState('kg')
   const [formCost, setFormCost] = useState('')
+  const [formCategory, setFormCategory] = useState('ירקות ופירות')
   const [formSubmitting, setFormSubmitting] = useState(false)
 
   // Fetch ingredients
@@ -71,6 +82,7 @@ export default function IngredientsPage() {
     setFormName('')
     setFormUnit('kg')
     setFormCost('')
+    setFormCategory('ירקות ופירות')
     setIsModalOpen(true)
   }
 
@@ -81,6 +93,7 @@ export default function IngredientsPage() {
     setFormName(ingredient.name)
     setFormUnit(ingredient.unit)
     setFormCost(ingredient.cost_per_unit.toString())
+    setFormCategory(ingredient.category || 'אחר')
     setIsModalOpen(true)
   }
 
@@ -101,13 +114,13 @@ export default function IngredientsPage() {
       if (modalMode === 'create') {
         const { error: insertError } = await supabase
           .from('ingredients')
-          .insert([{ name: formName, unit: formUnit, cost_per_unit: cost }])
+          .insert([{ name: formName, unit: formUnit, cost_per_unit: cost, category: formCategory }])
 
         if (insertError) throw insertError
       } else if (modalMode === 'edit' && selectedIngredient) {
         const { error: updateError } = await supabase
           .from('ingredients')
-          .update({ name: formName, unit: formUnit, cost_per_unit: cost })
+          .update({ name: formName, unit: formUnit, cost_per_unit: cost, category: formCategory })
           .eq('id', selectedIngredient.id)
 
         if (updateError) throw updateError
@@ -161,6 +174,10 @@ export default function IngredientsPage() {
     }
   }
 
+  const otherIngredients = filteredIngredients.filter(
+    (ing) => !ing.category || !INGREDIENT_CATEGORIES.includes(ing.category)
+  )
+
   return (
     <div className="space-y-8" dir="rtl">
       {/* Page Header */}
@@ -174,7 +191,7 @@ export default function IngredientsPage() {
         </div>
         <button
           onClick={handleOpenCreate}
-          className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-yellow-600 via-amber-500 to-yellow-600 hover:from-yellow-500 hover:via-amber-600 hover:to-yellow-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-amber-500/10 active:scale-[0.98] transition-all cursor-pointer"
+          className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-yellow-600 via-amber-500 to-yellow-600 hover:from-yellow-500 hover:via-amber-600 hover:to-yellow-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-amber-500/10 active:scale-[0.98] transition-all cursor-pointer shrink-0"
         >
           <Plus className="h-4 w-4" />
           הוסף חומר גלם
@@ -203,63 +220,136 @@ export default function IngredientsPage() {
         />
       </div>
 
-      {/* Main Table */}
-      <div className="bg-zinc-950 border border-zinc-900 rounded-2xl overflow-hidden shadow-xl text-right">
-        {loading && ingredients.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 className="h-10 w-10 text-amber-500 animate-spin mb-4" />
-            <p className="text-zinc-400 text-sm">טוען את מאגר חומרי הגלם...</p>
-          </div>
-        ) : filteredIngredients.length === 0 ? (
-          <div className="text-center py-16">
-            <Beef className="h-12 w-12 text-zinc-700 mx-auto mb-4" />
-            <p className="text-zinc-500 text-sm font-medium">לא נמצאו חומרי גלם במערכת.</p>
-            {searchTerm && <p className="text-zinc-650 text-zinc-600 text-xs mt-1">נסה לאפס או לשנות את סינון החיפוש.</p>}
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-right border-collapse">
-              <thead>
-                <tr className="border-b border-zinc-900 bg-zinc-950/40 text-zinc-400 text-xs font-bold uppercase tracking-wider">
-                  <th className="py-4.5 px-6">שם חומר הגלם</th>
-                  <th className="py-4.5 px-6">יחידת מידה</th>
-                  <th className="py-4.5 px-6">עלות ליחידה</th>
-                  <th className="py-4.5 px-6 text-left">פעולות</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-900 text-zinc-300 text-sm">
-                {filteredIngredients.map((ing) => (
-                  <tr key={ing.id} className="hover:bg-zinc-900/30 transition-colors">
-                    <td className="py-4 px-6 font-bold text-zinc-100">{ing.name}</td>
-                    <td className="py-4 px-6">
-                      <span className="inline-block px-2.5 py-1 bg-zinc-900 border border-zinc-850 border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300">
-                        {getUnitLabel(ing.unit)}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6 font-bold text-amber-500">
-                      ₪{Number(ing.cost_per_unit).toFixed(2)} <span className="text-xs text-zinc-500 font-medium">/ {getUnitLabel(ing.unit)}</span>
-                    </td>
-                    <td className="py-4 px-6 text-left space-x-2 space-x-reverse">
-                      <button
-                        onClick={() => handleOpenEdit(ing)}
-                        className="inline-flex p-2 bg-zinc-900 hover:bg-amber-500/10 text-zinc-400 hover:text-amber-400 rounded-lg transition-all cursor-pointer"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(ing.id)}
-                        className="inline-flex p-2 bg-zinc-900 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 rounded-lg transition-all cursor-pointer"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {/* Categorized Ingredients List */}
+      {loading && ingredients.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20">
+          <Loader2 className="h-10 w-10 text-amber-500 animate-spin mb-4" />
+          <p className="text-zinc-400 text-sm">טוען את מאגר חומרי הגלם...</p>
+        </div>
+      ) : filteredIngredients.length === 0 ? (
+        <div className="text-center py-16 bg-zinc-950 border border-zinc-900 rounded-2xl">
+          <Beef className="h-12 w-12 text-zinc-700 mx-auto mb-4" />
+          <p className="text-zinc-500 text-sm font-medium">לא נמצאו חומרי גלם במערכת.</p>
+          {searchTerm && <p className="text-zinc-600 text-xs mt-1">נסה לאפס או לשנות את סינון החיפוש.</p>}
+        </div>
+      ) : (
+        <div className="space-y-12">
+          {INGREDIENT_CATEGORIES.map((category) => {
+            const categoryIngredients = filteredIngredients.filter((ing) => ing.category === category)
+            if (categoryIngredients.length === 0) return null
+
+            return (
+              <div key={category} className="space-y-4">
+                <div className="flex items-center gap-3 border-r-4 border-amber-500 pr-3 text-right justify-start">
+                  <h2 className="text-xl font-black text-white">{category}</h2>
+                  <span className="text-xxs font-bold text-zinc-500 bg-zinc-950 px-2.5 py-0.5 rounded-full border border-zinc-900">
+                    {categoryIngredients.length} רכיבים
+                  </span>
+                </div>
+
+                <div className="bg-zinc-950 border border-zinc-900 rounded-2xl overflow-hidden shadow-xl text-right">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-right border-collapse">
+                      <thead>
+                        <tr className="border-b border-zinc-900 bg-zinc-950/40 text-zinc-400 text-xs font-bold uppercase tracking-wider">
+                          <th className="py-4.5 px-6">שם חומר הגלם</th>
+                          <th className="py-4.5 px-6">יחידת מידה</th>
+                          <th className="py-4.5 px-6">עלות ליחידה</th>
+                          <th className="py-4.5 px-6 text-left">פעולות</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-900 text-zinc-300 text-sm">
+                        {categoryIngredients.map((ing) => (
+                          <tr key={ing.id} className="hover:bg-zinc-900/30 transition-colors">
+                            <td className="py-4 px-6 font-bold text-zinc-100">{ing.name}</td>
+                            <td className="py-4 px-6">
+                              <span className="inline-block px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300">
+                                {getUnitLabel(ing.unit)}
+                              </span>
+                            </td>
+                            <td className="py-4 px-6 font-bold text-amber-500 font-mono">
+                              ₪{Number(ing.cost_per_unit).toFixed(2)} <span className="text-xs text-zinc-500 font-medium">/ {getUnitLabel(ing.unit)}</span>
+                            </td>
+                            <td className="py-4 px-6 text-left space-x-2 space-x-reverse">
+                              <button
+                                onClick={() => handleOpenEdit(ing)}
+                                className="inline-flex p-2 bg-zinc-900 hover:bg-amber-500/10 text-zinc-400 hover:text-amber-400 rounded-lg transition-all cursor-pointer"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(ing.id)}
+                                className="inline-flex p-2 bg-zinc-900 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 rounded-lg transition-all cursor-pointer"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+
+          {otherIngredients.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 border-r-4 border-zinc-700 pr-3 text-right justify-start">
+                <h2 className="text-xl font-black text-white">אחר</h2>
+                <span className="text-xxs font-bold text-zinc-500 bg-zinc-950 px-2.5 py-0.5 rounded-full border border-zinc-900">
+                  {otherIngredients.length} רכיבים
+                </span>
+              </div>
+
+              <div className="bg-zinc-950 border border-zinc-900 rounded-2xl overflow-hidden shadow-xl text-right">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-right border-collapse">
+                    <thead>
+                      <tr className="border-b border-zinc-900 bg-zinc-950/40 text-zinc-400 text-xs font-bold uppercase tracking-wider">
+                        <th className="py-4.5 px-6">שם חומר הגלם</th>
+                        <th className="py-4.5 px-6">יחידת מידה</th>
+                        <th className="py-4.5 px-6">עלות ליחידה</th>
+                        <th className="py-4.5 px-6 text-left">פעולות</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-900 text-zinc-300 text-sm">
+                      {otherIngredients.map((ing) => (
+                        <tr key={ing.id} className="hover:bg-zinc-900/30 transition-colors">
+                          <td className="py-4 px-6 font-bold text-zinc-100">{ing.name}</td>
+                          <td className="py-4 px-6">
+                            <span className="inline-block px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300">
+                              {getUnitLabel(ing.unit)}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6 font-bold text-amber-500 font-mono">
+                            ₪{Number(ing.cost_per_unit).toFixed(2)} <span className="text-xs text-zinc-500 font-medium">/ {getUnitLabel(ing.unit)}</span>
+                          </td>
+                          <td className="py-4 px-6 text-left space-x-2 space-x-reverse">
+                            <button
+                              onClick={() => handleOpenEdit(ing)}
+                              className="inline-flex p-2 bg-zinc-900 hover:bg-amber-500/10 text-zinc-400 hover:text-amber-400 rounded-lg transition-all cursor-pointer"
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(ing.id)}
+                              className="inline-flex p-2 bg-zinc-900 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 rounded-lg transition-all cursor-pointer"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Add / Edit Modal */}
       {isModalOpen && (
@@ -282,20 +372,37 @@ export default function IngredientsPage() {
 
             {/* Modal Form */}
             <form onSubmit={handleSubmit} className="p-6 space-y-5 text-right">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-                  שם חומר הגלם
-                </label>
-                <div className="relative">
-                  <Layers className="absolute right-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-zinc-500" />
-                  <input
-                    type="text"
-                    required
-                    value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                    placeholder="למשל: אנטריקוט בקר"
-                    className="w-full pr-10 pl-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white placeholder-zinc-600 text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none text-right"
-                  />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                    שם חומר הגלם
+                  </label>
+                  <div className="relative">
+                    <Layers className="absolute right-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-zinc-500" />
+                    <input
+                      type="text"
+                      required
+                      value={formName}
+                      onChange={(e) => setFormName(e.target.value)}
+                      placeholder="למשל: אנטריקוט בקר"
+                      className="w-full pr-10 pl-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white placeholder-zinc-600 text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none text-right"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                    קטגוריה
+                  </label>
+                  <select
+                    value={formCategory}
+                    onChange={(e) => setFormCategory(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none appearance-none text-right font-semibold"
+                  >
+                    {INGREDIENT_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -305,7 +412,7 @@ export default function IngredientsPage() {
                     יחידת מידה
                   </label>
                   <div className="relative">
-                    <Scale className="absolute right-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-zinc-500" />
+                    <Scale className="absolute right-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-zinc-500 pointer-events-none" />
                     <select
                       value={formUnit}
                       onChange={(e) => setFormUnit(e.target.value)}
@@ -325,7 +432,7 @@ export default function IngredientsPage() {
                     עלות ליחידה (₪)
                   </label>
                   <div className="relative">
-                    <DollarSign className="absolute right-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-zinc-500" />
+                    <DollarSign className="absolute right-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-zinc-500 pointer-events-none" />
                     <input
                       type="number"
                       step="0.01"
@@ -334,7 +441,7 @@ export default function IngredientsPage() {
                       value={formCost}
                       onChange={(e) => setFormCost(e.target.value)}
                       placeholder="18.50"
-                      className="w-full pr-10 pl-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white placeholder-zinc-600 text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none text-right"
+                      className="w-full pr-10 pl-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white placeholder-zinc-600 text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none text-right font-semibold"
                     />
                   </div>
                 </div>
