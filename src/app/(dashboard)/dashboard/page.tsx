@@ -298,7 +298,7 @@ export default function DashboardPage() {
                           })}
                         </span>
                         <span>•</span>
-                        <span>{order.portions} מנות מתוכננות</span>
+                        <span>{order.portions} מנות </span>
                       </div>
                     </div>
 

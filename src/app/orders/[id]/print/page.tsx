@@ -272,12 +272,34 @@ export default function PrintOrderPage({ params }: PageProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-900 text-zinc-300 print:text-black print:divide-black">
-                {order.order_dishes?.map((od, idx) => (
-                  <tr key={idx} className="hover:bg-zinc-900/10">
-                    <td className="py-3.5 px-6 font-bold text-zinc-100 print:text-black">{od.dishes?.name}</td>
-                    <td className="py-3.5 px-6 text-left font-mono font-bold text-zinc-300 print:text-black">{order.portions} מנות</td>
-                  </tr>
-                ))}
+                {(() => {
+                  const startersCount = order.order_dishes?.filter(
+                    (od) => od.dishes?.category === 'ראשונות'
+                  ).length || 0
+
+                  const mainsCount = order.order_dishes?.filter(
+                    (od) => od.dishes?.category === 'עיקריות'
+                  ).length || 0
+
+                  return order.order_dishes?.map((od, idx) => {
+                    const category = od.dishes?.category
+                    let dishPortions = order.portions || 0
+                    if (category === 'ראשונות' && startersCount > 0) {
+                      dishPortions = order.portions / startersCount
+                    } else if (category === 'עיקריות' && mainsCount > 0) {
+                      dishPortions = order.portions / mainsCount
+                    }
+
+                    return (
+                      <tr key={idx} className="hover:bg-zinc-900/10">
+                        <td className="py-3.5 px-6 font-bold text-zinc-100 print:text-black">{od.dishes?.name}</td>
+                        <td className="py-3.5 px-6 text-left font-mono font-bold text-zinc-300 print:text-black">
+                          {dishPortions % 1 === 0 ? dishPortions : dishPortions.toFixed(1)} מנות
+                        </td>
+                      </tr>
+                    )
+                  })
+                })()}
               </tbody>
             </table>
           </div>

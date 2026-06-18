@@ -258,9 +258,15 @@ export default function OrdersPage() {
                   return (
                     <tr key={order.id} className="hover:bg-zinc-900/20 transition-colors">
                       <td className="py-5 px-6">
-                        <Link href={`/orders/${order.id}`} className="font-bold text-zinc-100 hover:text-amber-400 transition-colors block">
-                          {order.client_name}
-                        </Link>
+                        {order.status === 'Paid' ? (
+                          <span className="font-bold text-zinc-450 text-zinc-400 block cursor-default">
+                            {order.client_name}
+                          </span>
+                        ) : (
+                          <Link href={`/orders/${order.id}`} className="font-bold text-zinc-100 hover:text-amber-400 transition-colors block">
+                            {order.client_name}
+                          </Link>
+                        )}
                       </td>
                       <td className="py-5 px-6">
                         <span className="flex items-center gap-1.5 text-zinc-300 justify-start">
@@ -299,13 +305,15 @@ export default function OrdersPage() {
                         >
                           <Printer className="h-4 w-4" />
                         </Link>
-                        <Link
-                          href={`/orders/${order.id}`}
-                          className="inline-flex p-2 bg-zinc-900 hover:bg-amber-500/10 text-zinc-400 hover:text-amber-400 rounded-lg transition-all"
-                          title="ערוך אירוע"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Link>
+                        {order.status !== 'Paid' && (
+                          <Link
+                            href={`/orders/${order.id}`}
+                            className="inline-flex p-2 bg-zinc-900 hover:bg-amber-500/10 text-zinc-400 hover:text-amber-400 rounded-lg transition-all"
+                            title="ערוך אירוע"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Link>
+                        )}
                         <button
                           onClick={() => handleDeleteOrder(order.id)}
                           className="inline-flex p-2 bg-zinc-900 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 rounded-lg transition-all cursor-pointer"
