@@ -61,9 +61,7 @@ export default function LoginPage() {
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
 
         <div className="flex flex-col items-center mb-8">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-tr from-yellow-600 to-amber-500 flex items-center justify-center shadow-lg shadow-amber-500/20 mb-4 ring-1 ring-white/10">
-            <ChefHat className="h-8 w-8 text-white" />
-          </div>
+          <img src="/logo.png" alt="לוגו טעמא" className="h-28 w-28 object-contain mb-4 rounded-full shadow-lg shadow-amber-500/5 border border-zinc-850" />
           <h1 className="text-3xl font-extrabold tracking-tight text-white mb-2">
             קייטרינג טַעֲמָא
           </h1>
@@ -124,7 +122,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3.5 px-4 bg-gradient-to-r from-yellow-600 via-amber-500 to-yellow-600 hover:from-yellow-500 hover:via-amber-600 hover:to-yellow-500 text-white font-bold rounded-xl text-sm transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 shadow-lg shadow-amber-600/10 flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full py-3.5 px-4 bg-gradient-to-r from-yellow-600 via-amber-500 to-yellow-600 hover:from-yellow-500 hover:via-amber-600 hover:to-yellow-500 text-pure-white font-bold rounded-xl text-sm transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100 shadow-lg shadow-amber-600/10 flex items-center justify-center gap-2 cursor-pointer"
           >
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin" />

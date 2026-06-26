@@ -31,6 +31,7 @@ const INGREDIENT_CATEGORIES = [
   "תבלינים",
   "מוצרים יבשים/מזווה",
   "מוצרי חלב",
+  "קפואים",
   "אחר"
 ]
 
@@ -38,7 +39,7 @@ export default function IngredientsPage() {
   const supabase = createClient()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  
+
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -191,7 +192,7 @@ export default function IngredientsPage() {
         </div>
         <button
           onClick={handleOpenCreate}
-          className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-yellow-600 via-amber-500 to-yellow-600 hover:from-yellow-500 hover:via-amber-600 hover:to-yellow-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-amber-500/10 active:scale-[0.98] transition-all cursor-pointer shrink-0"
+          className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-yellow-600 via-amber-500 to-yellow-600 hover:from-yellow-500 hover:via-amber-600 hover:to-yellow-500 text-pure-white font-bold text-sm rounded-xl shadow-lg shadow-amber-500/10 active:scale-[0.98] transition-all cursor-pointer shrink-0"
         >
           <Plus className="h-4 w-4" />
           הוסף חומר גלם
@@ -355,7 +356,7 @@ export default function IngredientsPage() {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" dir="rtl">
           <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-2xl overflow-hidden shadow-2xl relative">
-            
+
             {/* Modal Header */}
             <div className="h-14 flex items-center justify-between px-6 border-b border-zinc-900 bg-zinc-950/20">
               <h2 className="text-base font-bold text-white flex items-center gap-2">
@@ -459,7 +460,7 @@ export default function IngredientsPage() {
                 <button
                   type="submit"
                   disabled={formSubmitting}
-                  className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-yellow-600 via-amber-500 to-yellow-600 hover:from-yellow-500 hover:via-amber-600 hover:to-yellow-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-amber-500/10 transition-all cursor-pointer disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-yellow-600 via-amber-500 to-yellow-600 hover:from-yellow-500 hover:via-amber-600 hover:to-yellow-500 text-pure-white font-bold rounded-xl text-xs shadow-lg shadow-amber-500/10 transition-all cursor-pointer disabled:opacity-50"
                 >
                   {formSubmitting ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />

@@ -70,9 +70,7 @@ export default function PendingPage() {
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
 
         <div className="flex flex-col items-center mb-6">
-          <div className="h-14 w-14 rounded-2xl bg-zinc-900 border border-zinc-850 border-zinc-800 flex items-center justify-center mb-4 shadow-lg shadow-amber-500/10">
-            <ChefHat className="h-8 w-8 text-amber-500" />
-          </div>
+          <img src="/logo.png" alt="לוגו טעמא" className="h-28 w-28 object-contain mb-4 rounded-full shadow-lg shadow-amber-500/5 border border-zinc-850" />
           <h1 className="text-2xl font-extrabold tracking-tight text-white mb-2">
             קייטרינג טַעֲמָא
           </h1>

@@ -191,7 +191,7 @@ export default function PrintOrderPage({ params }: PageProps) {
         <div className="flex items-center gap-3">
           <button
             onClick={() => window.print()}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-yellow-600 via-amber-500 to-yellow-600 hover:from-yellow-500 hover:via-amber-600 hover:to-yellow-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-amber-500/10 active:scale-[0.98] transition-all cursor-pointer"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-yellow-600 via-amber-500 to-yellow-600 hover:from-yellow-500 hover:via-amber-600 hover:to-yellow-500 text-pure-white font-bold text-xs rounded-xl shadow-lg shadow-amber-500/10 active:scale-[0.98] transition-all cursor-pointer"
           >
             <Printer className="h-4 w-4" />
             הדפס דוח
@@ -206,9 +206,7 @@ export default function PrintOrderPage({ params }: PageProps) {
         <div className="flex flex-col sm:flex-row sm:items-start justify-between border-b-2 border-zinc-900 print:border-black pb-8 gap-6">
           <div className="space-y-3">
             <div className="flex items-center gap-2.5 justify-start">
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-yellow-600 to-amber-500 flex items-center justify-center text-white shadow-md print:bg-none print:text-black">
-                <ChefHat className="h-5.5 w-5.5 print:text-black" />
-              </div>
+              <img src="/logo.png" alt="לוגו טעמא" className="h-10 w-10 object-contain rounded-lg print:invert" />
               <span className="font-extrabold text-2xl tracking-tight bg-gradient-to-r from-amber-400 to-yellow-500 bg-clip-text text-transparent print:text-black">
                 קייטרינג טַעֲמָא
               </span>
