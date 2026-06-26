@@ -19,8 +19,27 @@ export function aggregateOrderIngredients(
   const map: { [id: string]: AggregatedIngredient } = {}
   let grandTotal = 0
 
+  // Count starters and mains to divide portions with 13% surcharge
+  let startersCount = 0
+  let mainsCount = 0
   orderDishes?.forEach((od) => {
-    od.dishes?.dish_ingredients?.forEach((di: any) => {
+    const category = od.dishes?.category
+    if (category === 'ראשונות') startersCount++
+    if (category === 'עיקריות') mainsCount++
+  })
+
+  orderDishes?.forEach((od) => {
+    const dish = od.dishes
+    if (!dish) return
+
+    let dishPortions = portions
+    if (dish.category === 'ראשונות' && startersCount > 0) {
+      dishPortions = Math.ceil((portions / startersCount) * 1.13)
+    } else if (dish.category === 'עיקריות' && mainsCount > 0) {
+      dishPortions = Math.ceil((portions / mainsCount) * 1.13)
+    }
+
+    dish.dish_ingredients?.forEach((di: any) => {
       const ing = di.ingredients
       if (!ing) return
 
@@ -30,7 +49,7 @@ export function aggregateOrderIngredients(
       const costPerUnit = Number(ing.cost_per_unit || 0)
       const qtyPerPortion = Number(di.quantity || 0)
       
-      const totalQty = qtyPerPortion * portions
+      const totalQty = qtyPerPortion * dishPortions
       const totalCost = totalQty * costPerUnit
 
       if (!map[ingId]) {
@@ -50,7 +69,7 @@ export function aggregateOrderIngredients(
   })
 
   // Add special automatically calculated ingredients:
-  // a) Rolls (לחמניה): 20% more than portions, rounded up to nearest 5.
+  // a) Rolls (לחמניה): 33% more than portions, rounded up to nearest 5.
   // b) Salad 4L Box (קופסת סלט 4 ליטר): For each salad dish, ceil(portions / 50).
   // c) Disposable Tray (מגש חד פעמי): For each dish in category "ראשונות", "תוספות", "עיקריות", "קינוחים", ceil(portions / 50).
 
@@ -60,7 +79,7 @@ export function aggregateOrderIngredients(
 
   // Add Rolls
   if (rollsIng && portions > 0) {
-    const rollsQty = Math.ceil((portions * 1.2) / 5) * 5
+    const rollsQty = Math.ceil((portions * 1.33) / 5) * 5
     const rollsCost = rollsQty * Number(rollsIng.cost_per_unit || 0)
     
     const ingId = rollsIng.id

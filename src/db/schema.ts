@@ -33,6 +33,12 @@ export const orders = pgTable('orders', {
   event_date: date('event_date').notNull(),
   status: text('status').notNull().default('Draft'),
   portions: integer('portions').notNull().default(10),
+  quote_base_price: numeric('quote_base_price', { precision: 10, scale: 2 }).default('0.00'),
+  quote_starters_extra: numeric('quote_starters_extra', { precision: 10, scale: 2 }).default('0.00'),
+  quote_portion_discount: numeric('quote_portion_discount', { precision: 10, scale: 2 }).default('0.00'),
+  quote_global_discount: numeric('quote_global_discount', { precision: 10, scale: 2 }).default('0.00'),
+  quote_delivery_type: text('quote_delivery_type').default('self'),
+  quote_delivery_price: numeric('quote_delivery_price', { precision: 10, scale: 2 }).default('0.00'),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   user_id: uuid('user_id'),
 })
