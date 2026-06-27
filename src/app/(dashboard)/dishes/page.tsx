@@ -341,7 +341,7 @@ export default function DishesPage() {
 
       {/* Search Bar */}
       <div className="relative max-w-md text-right">
-        <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-500" />
+        <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400" />
         <input
           type="text"
           placeholder="חפש מנה / מתכון לפי שם..."
@@ -360,7 +360,7 @@ export default function DishesPage() {
       ) : filteredDishes.length === 0 ? (
         <div className="text-center py-16 bg-zinc-950 border border-zinc-900 rounded-2xl">
           <UtensilsCrossed className="h-12 w-12 text-zinc-700 mx-auto mb-4" />
-          <p className="text-zinc-500 text-sm font-medium">לא נמצאו מנות התואמות לחיפוש.</p>
+          <p className="text-zinc-400 text-sm font-medium">לא נמצאו מנות התואמות לחיפוש.</p>
         </div>
       ) : (
         <div className="space-y-12">
@@ -373,7 +373,7 @@ export default function DishesPage() {
               <div key={category} className="space-y-5">
                 <div className="flex items-center gap-3 border-r-4 border-amber-500 pr-3">
                   <h2 className="text-xl font-black text-white">{category}</h2>
-                  <span className="text-xxs font-bold text-zinc-500 bg-zinc-950 px-2.5 py-0.5 rounded-full border border-zinc-900">
+                  <span className="text-xxs font-bold text-zinc-400 bg-zinc-950 px-2.5 py-0.5 rounded-full border border-zinc-900">
                     {categoryDishes.length} מנות
                   </span>
                 </div>
@@ -400,7 +400,7 @@ export default function DishesPage() {
                             {dish.dish_ingredients?.map((di) => (
                               <div key={di.id} className="flex justify-between">
                                 <span className="truncate">{di.ingredients?.name}</span>
-                                <span className="text-zinc-550 text-zinc-500 shrink-0 font-mono pl-2">
+                                <span className="text-zinc-400 shrink-0 font-mono pl-2">
                                   {di.quantity} {getUnitLabel(di.ingredients?.unit || '')}
                                 </span>
                               </div>
@@ -410,7 +410,7 @@ export default function DishesPage() {
 
                         <div className="flex items-center justify-between mt-auto pt-2">
                           <div>
-                            <span className="block text-xxs text-zinc-500 font-semibold uppercase">עלות מנה מוערכת</span>
+                            <span className="block text-xxs text-zinc-400 font-semibold uppercase">עלות מנה מוערכת</span>
                             <span className="text-lg font-black text-amber-500">₪{cost.toFixed(2)}</span>
                           </div>
 
@@ -442,7 +442,7 @@ export default function DishesPage() {
             <div className="space-y-5">
               <div className="flex items-center gap-3 border-r-4 border-zinc-700 pr-3">
                 <h2 className="text-xl font-black text-white">מנות אחרות</h2>
-                <span className="text-xxs font-bold text-zinc-500 bg-zinc-950 px-2.5 py-0.5 rounded-full border border-zinc-900">
+                <span className="text-xxs font-bold text-zinc-400 bg-zinc-950 px-2.5 py-0.5 rounded-full border border-zinc-900">
                   {otherDishes.length} מנות
                 </span>
               </div>
@@ -469,7 +469,7 @@ export default function DishesPage() {
                           {dish.dish_ingredients?.map((di) => (
                             <div key={di.id} className="flex justify-between">
                               <span className="truncate">{di.ingredients?.name}</span>
-                              <span className="text-zinc-550 text-zinc-500 shrink-0 font-mono pl-2">
+                              <span className="text-zinc-400 shrink-0 font-mono pl-2">
                                 {di.quantity} {getUnitLabel(di.ingredients?.unit || '')}
                               </span>
                             </div>
@@ -479,7 +479,7 @@ export default function DishesPage() {
 
                       <div className="flex items-center justify-between mt-auto pt-2">
                         <div>
-                          <span className="block text-xxs text-zinc-500 font-semibold uppercase">עלות מנה מוערכת</span>
+                          <span className="block text-xxs text-zinc-400 font-semibold uppercase">עלות מנה מוערכת</span>
                           <span className="text-lg font-black text-amber-500">₪{cost.toFixed(2)}</span>
                         </div>
 
@@ -594,7 +594,7 @@ export default function DishesPage() {
                     return (
                       <div
                         key={idx}
-                        className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-3.5 bg-black/60 border border-zinc-900 rounded-xl"
+                        className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-3.5 bg-zinc-900/30 border border-zinc-800/50 hover:bg-zinc-900/40 hover:border-zinc-800/80 rounded-xl transition-all duration-200"
                       >
                         {/* Custom Searchable Popover Dropdown */}
                         <div className="flex-1 min-w-[220px] relative">
@@ -606,12 +606,12 @@ export default function DishesPage() {
                             }}
                             className="w-full text-right px-3.5 py-2.5 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-lg text-zinc-200 text-sm focus:border-amber-500 transition-all outline-none flex items-center justify-between cursor-pointer"
                           >
-                            <span className={selectedIng ? "text-zinc-200 font-bold" : "text-zinc-500"}>
+                            <span className={selectedIng ? "text-zinc-200 font-bold" : "text-zinc-400 font-medium"}>
                               {selectedIng 
                                 ? `${selectedIng.name} (₪${Number(selectedIng.cost_per_unit).toFixed(2)}/${getUnitLabel(selectedIng.unit)})` 
                                 : "בחר חומר גלם..."}
                             </span>
-                            <span className="text-zinc-500 text-xs shrink-0">▼</span>
+                            <span className="text-zinc-400 text-xs shrink-0">▼</span>
                           </button>
 
                           {/* Searchable overlay content */}
@@ -627,7 +627,7 @@ export default function DishesPage() {
                                   placeholder="חפש חומר גלם..."
                                   value={ingredientSearch}
                                   onChange={(e) => setIngredientSearch(e.target.value)}
-                                  className="w-full px-3 py-2 bg-black border border-zinc-900 rounded-lg text-white text-xs placeholder-zinc-600 focus:border-amber-500 outline-none text-right"
+                                  className="w-full px-3 py-2 bg-black border border-zinc-900 rounded-lg text-white text-xs placeholder-zinc-650 placeholder-zinc-500 focus:border-amber-500 outline-none text-right"
                                   autoFocus
                                 />
                                 <div className="flex-1 overflow-y-auto space-y-3 pr-1">
@@ -660,7 +660,7 @@ export default function DishesPage() {
                                                   }`}
                                                 >
                                                   <span>{i.name}</span>
-                                                  <span className="text-xxs text-zinc-500 shrink-0 font-mono">
+                                                  <span className="text-xxs text-zinc-400 shrink-0 font-mono">
                                                     ₪{Number(i.cost_per_unit).toFixed(2)}/{getUnitLabel(i.unit)}
                                                   </span>
                                                 </button>
@@ -689,7 +689,7 @@ export default function DishesPage() {
                             onChange={(e) => updateLineItem(idx, 'quantity', e.target.value)}
                             className="w-full bg-transparent border-none py-2 px-1 text-left text-sm text-white focus:outline-none"
                           />
-                          <span className="text-zinc-500 text-xs font-semibold mr-1 shrink-0 bg-zinc-900 px-2 py-0.5 rounded-md flex items-center gap-1 font-mono">
+                          <span className="text-zinc-400 text-xs font-semibold mr-1 shrink-0 bg-zinc-900 px-2 py-0.5 rounded-md flex items-center gap-1 font-mono">
                             <Scale className="h-3 w-3" />
                             {getUnitLabel(unit)}
                           </span>
@@ -697,7 +697,7 @@ export default function DishesPage() {
 
                         {/* Pricing display */}
                         <div className="w-24 text-left flex items-center justify-start font-mono text-sm shrink-0">
-                          <span className="text-zinc-500 text-xs ml-1">₪</span>
+                          <span className="text-amber-500/70 text-xs ml-1">₪</span>
                           <span className="font-bold text-amber-500">{totalCost.toFixed(2)}</span>
                         </div>
 
@@ -705,7 +705,7 @@ export default function DishesPage() {
                         <button
                           type="button"
                           onClick={() => removeLineItem(idx)}
-                          className="p-2 hover:bg-red-500/10 text-zinc-500 hover:text-red-400 rounded-lg transition-all shrink-0 cursor-pointer text-center flex items-center justify-center self-end sm:self-auto"
+                          className="p-2 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 rounded-lg transition-all shrink-0 cursor-pointer text-center flex items-center justify-center self-end sm:self-auto"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>

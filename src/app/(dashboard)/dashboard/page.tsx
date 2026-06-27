@@ -284,13 +284,13 @@ export default function DashboardPage() {
                 return (
                   <div
                     key={order.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-black/50 border border-zinc-900 rounded-xl hover:border-zinc-800 transition-all gap-4 text-right"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-zinc-900/30 border border-zinc-800/50 rounded-xl hover:bg-zinc-900/40 hover:border-zinc-800 transition-all gap-4 text-right duration-200"
                   >
                     <div>
                       <h4 className="font-bold text-zinc-100">{order.client_name}</h4>
                       <div className="flex items-center gap-3 mt-1.5 text-xs text-zinc-400 justify-start">
                         <span className="flex items-center gap-1">
-                          <Calendar className="h-3.5 w-3.5 text-zinc-500" />
+                          <Calendar className="h-3.5 w-3.5 text-zinc-400" />
                           {new Date(order.event_date).toLocaleDateString('he-IL', {
                             month: 'short',
                             day: 'numeric',
@@ -304,7 +304,7 @@ export default function DashboardPage() {
 
                     <div className="flex items-center justify-between sm:justify-end gap-6">
                       <div className="text-left">
-                        <span className="block text-xxs text-zinc-500 font-semibold uppercase">עלות רכיבים מוערכת</span>
+                        <span className="block text-xxs text-zinc-400 font-semibold uppercase">עלות רכיבים מוערכת</span>
                         <span className="text-sm font-bold text-amber-500 font-mono">₪{orderCost.toFixed(2)}</span>
                       </div>
 
@@ -354,13 +354,13 @@ export default function DashboardPage() {
                 <p className="text-zinc-550 text-zinc-500 text-sm py-4 text-center font-medium">טרם בוצעו הזמנות.</p>
               ) : (
                 topDishes.map((dish, i) => (
-                  <div key={dish.name} className="flex items-center gap-4 p-3 bg-black/40 border border-zinc-900 rounded-xl">
+                  <div key={dish.name} className="flex items-center gap-4 p-3 bg-zinc-900/20 border border-zinc-900/80 hover:bg-zinc-900/35 hover:border-zinc-800/80 rounded-xl transition-all">
                     <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-yellow-600 to-amber-500 flex items-center justify-center text-sm font-black text-white shrink-0">
                       {i + 1}
                     </div>
                     <div className="flex-1 min-w-0 text-right">
                       <h4 className="font-bold text-zinc-200 truncate">{dish.name}</h4>
-                      <p className="text-xs text-zinc-500 mt-0.5">{dish.portions} מנות הוזמנו בסה"כ</p>
+                      <p className="text-xs text-zinc-400 mt-0.5">{dish.portions} מנות הוזמנו בסה"כ</p>
                     </div>
                   </div>
                 ))
@@ -374,14 +374,14 @@ export default function DashboardPage() {
             <div className="grid grid-cols-2 gap-3">
               <Link
                 href="/orders/new"
-                className="flex flex-col items-center justify-center p-4 bg-black/60 hover:bg-black border border-zinc-900 hover:border-amber-500/40 rounded-xl text-center group transition-all"
+                className="flex flex-col items-center justify-center p-4 bg-zinc-900/30 hover:bg-zinc-900/60 border border-zinc-900 hover:border-amber-500/40 rounded-xl text-center group transition-all"
               >
                 <ClipboardList className="h-5 w-5 text-amber-500 mb-2 group-hover:scale-110 transition-transform" />
                 <span className="text-xs font-bold text-zinc-300">הזמנה חדשה</span>
               </Link>
               <Link
                 href="/dishes"
-                className="flex flex-col items-center justify-center p-4 bg-black/60 hover:bg-black border border-zinc-900 hover:border-amber-500/40 rounded-xl text-center group transition-all"
+                className="flex flex-col items-center justify-center p-4 bg-zinc-900/30 hover:bg-zinc-900/60 border border-zinc-900 hover:border-amber-500/40 rounded-xl text-center group transition-all"
               >
                 <UtensilsCrossed className="h-5 w-5 text-amber-500 mb-2 group-hover:scale-110 transition-transform" />
                 <span className="text-xs font-bold text-zinc-300">בונה מתכונים</span>

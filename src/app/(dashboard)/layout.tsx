@@ -141,11 +141,11 @@ export default function DashboardLayout({
                 key={item.href}
                 href={item.href}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${isActive
-                  ? 'bg-gradient-to-l from-yellow-600/10 to-amber-500/10 text-amber-400 border-r-2 border-amber-500 pr-3 pl-4'
+                  ? 'bg-gradient-to-l from-yellow-600/10 to-amber-500/10 text-amber-600 border-r-2 border-amber-500 pr-3 pl-4'
                   : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/50'
                   }`}
               >
-                <Icon className={`h-5 w-5 ${isActive ? 'text-amber-400' : 'text-zinc-400'}`} />
+                <Icon className={`h-5 w-5 ${isActive ? 'text-amber-600' : 'text-zinc-400'}`} />
                 <span>{item.name}</span>
               </Link>
             )
@@ -156,7 +156,7 @@ export default function DashboardLayout({
           <div className="p-4 border-t border-zinc-900/50 bg-zinc-950/20">
             <button
               onClick={handleInstallClick}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-amber-400 hover:text-amber-300 bg-amber-500/5 hover:bg-amber-500/10 border border-amber-500/15 hover:border-amber-500/30 transition-all cursor-pointer shadow-sm shadow-amber-500/5"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-amber-600 hover:text-amber-700 bg-amber-500/5 hover:bg-amber-500/10 border border-amber-500/20 hover:border-amber-500/40 transition-all cursor-pointer shadow-sm shadow-amber-500/5"
             >
               <Smartphone className="h-4 w-4" />
               הורד כאפליקציה לנייד
@@ -205,7 +205,7 @@ export default function DashboardLayout({
 
       {/* Mobile Drawer Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 bg-black/95 backdrop-blur-md z-30 pt-16 flex flex-col">
+        <div className="md:hidden fixed inset-0 bg-zinc-950/95 backdrop-blur-md z-30 pt-16 flex flex-col">
           <nav className="flex-1 p-6 space-y-3">
             {navItems.map((item) => {
               const Icon = item.icon
@@ -216,7 +216,7 @@ export default function DashboardLayout({
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
                   className={`flex items-center gap-4 px-4 py-4 rounded-xl text-base font-bold transition-all ${isActive
-                    ? 'bg-gradient-to-l from-yellow-600/10 to-amber-500/10 text-amber-400 border-r-4 border-amber-500 pr-3 pl-4'
+                    ? 'bg-gradient-to-l from-yellow-600/10 to-amber-500/10 text-amber-600 border-r-4 border-amber-500 pr-3 pl-4'
                     : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/50'
                     }`}
                 >
@@ -230,7 +230,7 @@ export default function DashboardLayout({
             <div className="p-6 pb-2 border-t border-zinc-900 bg-zinc-950/20">
               <button
                 onClick={handleInstallClick}
-                className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-amber-400 bg-amber-500/5 hover:bg-amber-500/10 border border-amber-500/20 transition-all cursor-pointer"
+                className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-amber-600 bg-amber-500/5 hover:bg-amber-500/10 border border-amber-500/20 transition-all cursor-pointer"
               >
                 <Smartphone className="h-5 w-5" />
                 הורד כאפליקציה לנייד

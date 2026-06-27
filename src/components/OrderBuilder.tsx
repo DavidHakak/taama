@@ -533,7 +533,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                   שם הלקוח / האירוע
                 </label>
                 <div className="relative">
-                  <User className="absolute right-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-zinc-500" />
+                  <User className="absolute right-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-zinc-400" />
                   <input
                     type="text"
                     required
@@ -551,7 +551,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                   תאריך אירוע
                 </label>
                 <div className="relative font-sans">
-                  <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-zinc-500 pointer-events-none" />
+                  <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-zinc-400 pointer-events-none" />
                   <input
                     type="date"
                     required
@@ -652,7 +652,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                   return (
                     <div
                       key={idx}
-                      className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-3.5 bg-black/60 border border-zinc-900 rounded-xl"
+                      className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-3.5 bg-zinc-900/30 border border-zinc-800/50 hover:bg-zinc-900/40 hover:border-zinc-800/80 rounded-xl transition-all duration-200"
                     >
                       {/* Dish Selection */}
                       <div className="flex-1 min-w-[200px] relative">
@@ -667,12 +667,12 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                           className={`w-full text-right px-3.5 py-2.5 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-lg text-zinc-200 text-sm focus:border-amber-500 transition-all outline-none flex items-center justify-between cursor-pointer ${isLocked ? 'opacity-60 cursor-not-allowed' : ''
                             }`}
                         >
-                          <span className={dishObj ? "text-zinc-200 font-bold" : "text-zinc-500"}>
+                          <span className={dishObj ? "text-zinc-200 font-bold" : "text-zinc-400 font-medium"}>
                             {dishObj
                               ? `${dishObj.name} (₪${dishCost.toFixed(2)} / מנה)`
                               : "בחר מנה..."}
                           </span>
-                          <span className="text-zinc-500 text-xs shrink-0">▼</span>
+                          <span className="text-zinc-400 text-xs shrink-0">▼</span>
                         </button>
 
                         {/* Dropdown Popover */}
@@ -719,7 +719,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                                           }`}
                                       >
                                         <span>{d.name}</span>
-                                        <span className="text-xxs text-zinc-500 shrink-0 font-mono">
+                                        <span className="text-xxs text-zinc-400 shrink-0 font-mono">
                                           ₪{cost.toFixed(2)}
                                         </span>
                                       </button>
@@ -734,9 +734,9 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
 
                       {/* Costing breakdown */}
                       <div className="w-32 text-left flex items-center justify-start font-mono text-sm shrink-0">
-                        <span className="text-zinc-500 text-xs ml-1">₪</span>
+                        <span className="text-amber-500/70 text-xs ml-1">₪</span>
                         <span className="font-bold text-amber-500">{rowTotalCostScaled.toFixed(2)}</span>
-                        <span className="text-zinc-500 text-xxs mr-1">
+                        <span className="text-zinc-400 text-xxs mr-1">
                           ({rowPortions % 1 === 0 ? rowPortions : rowPortions.toFixed(1)} מנות)
                         </span>
                       </div>
@@ -746,7 +746,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                         <button
                           type="button"
                           onClick={() => removeDishRow(idx)}
-                          className="p-2 hover:bg-red-500/10 text-zinc-500 hover:text-red-400 rounded-lg transition-all shrink-0 cursor-pointer text-center flex items-center justify-center self-end sm:self-auto"
+                          className="p-2 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 rounded-lg transition-all shrink-0 cursor-pointer text-center flex items-center justify-center self-end sm:self-auto"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -837,10 +837,10 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                 <p className="text-zinc-600 text-xs py-4 text-center">טרם נבחרו מנות.</p>
               ) : (
                 aggregatedIngredients.map((item) => (
-                  <div key={item.ingredientId} className="p-3 bg-black/40 border border-zinc-900 rounded-xl flex items-center justify-between gap-3 text-right">
+                  <div key={item.ingredientId} className="p-3 bg-zinc-900/20 border border-zinc-900/80 hover:bg-zinc-900/35 hover:border-zinc-800/80 rounded-xl flex items-center justify-between gap-3 text-right transition-all">
                     <div className="min-w-0 text-right">
                       <span className="block text-xs font-bold text-zinc-200 truncate">{item.ingredientName}</span>
-                      <span className="text-xxs font-semibold text-zinc-500 uppercase font-mono mt-0.5 inline-block">
+                      <span className="text-xxs font-semibold text-zinc-400 uppercase font-mono mt-0.5 inline-block">
                         {item.totalQuantity.toFixed(2)} {getUnitLabel(item.unit)}
                       </span>
                     </div>
