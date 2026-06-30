@@ -15,6 +15,7 @@ import {
   Menu,
   X,
   Smartphone,
+  ShoppingBag,
 } from 'lucide-react'
 import React from 'react'
 
@@ -115,6 +116,8 @@ export default function DashboardLayout({
     { name: 'רכיבים ומלאי', href: '/ingredients', icon: Beef },
     { name: 'מנות ומתכונים', href: '/dishes', icon: UtensilsCrossed },
     { name: 'הזמנות ואירועים', href: '/orders', icon: ClipboardList },
+    { name: 'ניהול חנות שבת', href: '/shop-admin', icon: ShoppingBag },
+    { name: 'ריכוז קניות מאוחד', href: '/shopping-list', icon: ClipboardList },
     ...(isAdmin ? [{ name: 'ניהול משתמשים', href: '/users', icon: User }] : []),
   ]
 

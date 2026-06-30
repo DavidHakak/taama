@@ -20,6 +20,7 @@ import {
   Check,
 } from 'lucide-react'
 import Link from 'next/link'
+import { CustomSelect } from '@/components/ui/CustomSelect'
 
 interface Dish {
   id: string
@@ -935,14 +936,15 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                     <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
                       אופן אספקה
                     </label>
-                    <select
+                    <CustomSelect
+                      options={[
+                        { value: 'self', label: 'איסוף עצמי' },
+                        { value: 'delivery', label: 'משלוח / הובלה' },
+                      ]}
                       value={quoteDeliveryType}
-                      onChange={(e) => setQuoteDeliveryType(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none text-right appearance-none font-semibold"
-                    >
-                      <option value="self">איסוף עצמי</option>
-                      <option value="delivery">משלוח / הובלה</option>
-                    </select>
+                      onChange={setQuoteDeliveryType}
+                      placeholder="בחר אופן אספקה..."
+                    />
                   </div>
 
                   {quoteDeliveryType === 'delivery' && (
@@ -1006,6 +1008,14 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+      {saving && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-zinc-950/85 border border-zinc-900 rounded-2xl p-6 flex flex-col items-center shadow-2xl">
+            <Loader2 className="h-10 w-10 text-amber-500 animate-spin mb-4" />
+            <p className="text-zinc-200 text-sm font-bold">שומר אירוע, אנא המתן...</p>
           </div>
         </div>
       )}

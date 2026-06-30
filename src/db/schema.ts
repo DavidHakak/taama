@@ -1,4 +1,5 @@
-import { pgTable, uuid, text, numeric, timestamp, integer, date, boolean } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, numeric, timestamp, integer, date, boolean, pgView } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
 
 export const ingredients = pgTable('ingredients', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -58,5 +59,132 @@ export const profiles = pgTable('profiles', {
   email: text('email').notNull(),
   is_approved: boolean('is_approved').default(false).notNull(),
   is_admin: boolean('is_admin').default(false).notNull(),
+  is_blocked: boolean('is_blocked').default(false).notNull(),
+  full_name: text('full_name'),
+  phone: text('phone'),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
+
+// אירועי חלוקה/מכירה לשבתות וחגים
+export const shopEvents = pgTable('shop_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  pickup_date: date('pickup_date').notNull(),
+  is_active: boolean('is_active').default(true).notNull(),
+  is_special: boolean('is_special').default(false).notNull(),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+})
+
+// מוצרי החנות (עצמאיים ומנותקים מטבלת המנות של הקייטרינג)
+export const shopProducts = pgTable('shop_products', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  category: text('category').notNull(),
+  is_visible: boolean('is_visible').default(true).notNull(),
+  announcement_text: text('announcement_text'),
+  image_url: text('image_url'),
+})
+
+// מידות ומחירים עבור מוצרי החנות (וריאנטים)
+export const shopProductVariants = pgTable('shop_product_variants', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  shop_product_id: uuid('shop_product_id')
+    .references(() => shopProducts.id, { onDelete: 'cascade' })
+    .notNull(),
+  size_type: text('size_type').notNull(),
+  price: numeric('price', { precision: 10, scale: 2 }).notNull(),
+  stock_limit: integer('stock_limit'),
+})
+
+// רכיבים עבור מוצרי החנות (משויכים לווריאנט ספציפי)
+export const shopProductIngredients = pgTable('shop_product_ingredients', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  shop_product_variant_id: uuid('shop_product_variant_id')
+    .references(() => shopProductVariants.id, { onDelete: 'cascade' })
+    .notNull(),
+  ingredient_id: uuid('ingredient_id')
+    .references(() => ingredients.id, { onDelete: 'cascade' })
+    .notNull(),
+  quantity: numeric('quantity', { precision: 10, scale: 3 }).notNull().default('0.000'),
+})
+
+// קופונים בחנות
+export const shopCoupons = pgTable('shop_coupons', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  code: text('code').notNull().unique(),
+  discount_type: text('discount_type').notNull(), // 'percentage' | 'fixed'
+  discount_value: numeric('discount_value', { precision: 10, scale: 2 }).notNull(),
+  min_order_value: numeric('min_order_value', { precision: 10, scale: 2 }).notNull().default('0.00'),
+  max_uses: integer('max_uses'),
+  used_count: integer('used_count').notNull().default(0),
+  expiration_date: timestamp('expiration_date', { withTimezone: true }),
+  is_active: boolean('is_active').default(true).notNull(),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+})
+
+// הזמנות מהחנות
+export const shopOrders = pgTable('shop_orders', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  user_id: uuid('user_id').references(() => profiles.id).notNull(),
+  event_id: uuid('event_id').references(() => shopEvents.id).notNull(),
+  status: text('status').notNull().default('New'),
+  total_price: numeric('total_price', { precision: 10, scale: 2 }).notNull(),
+  coupon_id: uuid('coupon_id').references(() => shopCoupons.id, { onDelete: 'restrict' }),
+  coupon_discount: numeric('coupon_discount', { precision: 10, scale: 2 }).notNull().default('0.00'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+})
+
+// פריטים בתוך הזמנת חנות
+export const shopOrderItems = pgTable('shop_order_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  shop_order_id: uuid('shop_order_id').references(() => shopOrders.id, { onDelete: 'cascade' }).notNull(),
+  shop_product_id: uuid('shop_product_id').references(() => shopProducts.id, { onDelete: 'restrict' }).notNull(),
+  size_type: text('size_type').notNull(),
+  quantity: integer('quantity').notNull(),
+  price_at_purchase: numeric('price_at_purchase', { precision: 10, scale: 2 }).notNull(),
+})
+
+// מבצעים בחנות
+export const shopPromotions = pgTable('shop_promotions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  category: text('category').notNull(),
+  package_qty: integer('package_qty').notNull(),
+  package_price: numeric('package_price', { precision: 10, scale: 2 }).notNull(),
+  is_active: boolean('is_active').default(true).notNull(),
+  size_type: text('size_type'),
+})
+
+// הגדרות חנות
+export const storeSettings = pgTable('store_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+})
+
+// רשימות קניות שמורות בצד
+export const savedShoppingLists = pgTable('saved_shopping_lists', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  notes: text('notes'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+})
+
+// פריטי רשימת קניות שמורה
+export const savedShoppingListItems = pgTable('saved_shopping_list_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  listId: uuid('list_id')
+    .references(() => savedShoppingLists.id, { onDelete: 'cascade' })
+    .notNull(),
+  ingredientId: uuid('ingredient_id')
+    .references(() => ingredients.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  unit: text('unit').notNull(),
+  category: text('category').notNull(),
+  cateringQty: numeric('catering_qty', { precision: 10, scale: 3 }).notNull().default('0.000'),
+  shopQty: numeric('shop_qty', { precision: 10, scale: 3 }).notNull().default('0.000'),
+  totalQty: numeric('total_qty', { precision: 10, scale: 3 }).notNull().default('0.000'),
+  isPurchased: boolean('is_purchased').default(false).notNull(),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+})
+

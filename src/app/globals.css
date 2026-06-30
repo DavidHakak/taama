@@ -1,8 +1,60 @@
 @import "tailwindcss";
 
 :root {
-  --background: #faf6f0;
-  --foreground: #2b1e10;
+  /* ==========================================================================
+     Template A: Dashboard Theme (White & Orange)
+     ========================================================================== */
+  --background: #ffffff;
+  --foreground: #18181b;
+
+  --color-zinc-950-val: #ffffff; /* pure white card backgrounds */
+  --color-zinc-900-val: #f4f4f5; /* light gray panels */
+  --color-zinc-850-val: #e4e4e7;
+  --color-zinc-800-val: #e4e4e7; /* light border */
+  --color-zinc-700-val: #d4d4d8;
+  --color-zinc-650-val: #a1a1aa;
+  --color-zinc-600-val: #71717a;
+  --color-zinc-500-val: #71717a;
+  --color-zinc-400-val: #52525b;
+  --color-zinc-300-val: #27272a;
+  --color-zinc-200-val: #18181b;
+  --color-zinc-100-val: #18181b;
+  --color-zinc-50-val: #09090b;
+
+  /* Orange scale for Dashboard */
+  --color-amber-500-val: #f97316; /* Orange */
+  --color-amber-600-val: #ea580c; /* Darker orange */
+  --color-yellow-650-val: #c2410c;
+  --color-yellow-600-val: #ea580c;
+}
+
+.shop-theme {
+  /* ==========================================================================
+     Template B: Storefront Client Theme (White, Gold, and Green)
+     ========================================================================== */
+  --background: #faf8f4;        /* Elegant soft cream background (removes all storefront black background) */
+  --foreground: #2f3e30;        /* Deep olive green for primary text */
+
+  /* Invert zinc scale to elegant olive/cream theme components */
+  --color-zinc-950-val: #ffffff; /* Pure white card backgrounds */
+  --color-zinc-900-val: #f2f5f2; /* Very light olive/sand for inner sections */
+  --color-zinc-850-val: #ebd2b9;
+  --color-zinc-800-val: #e3e8e4; /* Warm linen-olive borders */
+  --color-zinc-700-val: #d0d7d1;
+  --color-zinc-650-val: #b1bdb2;
+  --color-zinc-600-val: #93a394;
+  --color-zinc-500-val: #748a76;
+  --color-zinc-400-val: #586b59; /* Medium olive green for body text */
+  --color-zinc-300-val: #465a48;
+  --color-zinc-200-val: #3b4c3d;
+  --color-zinc-100-val: #2f3e30; /* Deep olive dark text */
+  --color-zinc-50-val: #1b241c;
+
+  /* Map accents to rich gold */
+  --color-amber-500-val: #cfa43c; /* Gold accent */
+  --color-amber-600-val: #b58c30; /* Gold hover state */
+  --color-yellow-650-val: #a07a28;
+  --color-yellow-600-val: #cfa43c;
 }
 
 @theme {
@@ -11,68 +63,50 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
-  /* Define pure white color */
+  /* Define pure white color utility */
   --color-pure-white: #ffffff;
 
-  /* Invert zinc scale to elegant warm earth colors */
-  --color-zinc-950: #ffffff;          /* Pure white card backgrounds */
-  --color-zinc-900: #f5efe6;          /* Light sand for table headers and inner sections */
-  --color-zinc-800: #e6dfd5;          /* Warm linen borders */
-  --color-zinc-700: #d8cfc4;          /* Warm sand borders (darker) */
-  --color-zinc-600: #a89b8c;          /* Muted text */
-  --color-zinc-500: #8a7b6c;          /* Secondary text */
-  --color-zinc-400: #66584a;          /* Body text */
-  --color-zinc-300: #4f4133;          /* Dark gray-brown */
-  --color-zinc-200: #3b2e20;          /* Deep charcoal-brown */
-  --color-zinc-100: #2b1e10;          /* Primary dark text */
-  --color-zinc-50: #1c1208;           /* Deep black-brown */
+  /* Dynamic Zinc mappings */
+  --color-zinc-950: var(--color-zinc-950-val);
+  --color-zinc-900: var(--color-zinc-900-val);
+  --color-zinc-850: var(--color-zinc-850-val);
+  --color-zinc-800: var(--color-zinc-800-val);
+  --color-zinc-700: var(--color-zinc-700-val);
+  --color-zinc-600: var(--color-zinc-600-val);
+  --color-zinc-550: var(--color-zinc-500-val);
+  --color-zinc-500: var(--color-zinc-500-val);
+  --color-zinc-400: var(--color-zinc-400-val);
+  --color-zinc-300: var(--color-zinc-300-val);
+  --color-zinc-200: var(--color-zinc-200-val);
+  --color-zinc-100: var(--color-zinc-100-val);
+  --color-zinc-50: var(--color-zinc-50-val);
 
-  /* Map amber and yellow to modern warm orange / terracotta */
-  --color-amber-50: #fffaf5;
-  --color-amber-100: #ffeedc;
-  --color-amber-200: #fed8b3;
-  --color-amber-300: #fdba74;
-  --color-amber-400: #fb923c;
-  --color-amber-500: #f97316;
-  --color-amber-600: #ea580c;
-  --color-amber-700: #c2410c;
-  --color-amber-800: #9a3412;
-  --color-amber-900: #7c2d12;
-  --color-amber-950: #431407;
-
-  --color-yellow-50: #fff7ed;
-  --color-yellow-100: #ffedd5;
-  --color-yellow-200: #fed7aa;
-  --color-yellow-300: #fdba74;
-  --color-yellow-400: #fb923c;
-  --color-yellow-500: #f97316;
-  --color-yellow-600: #ea580c;
-  --color-yellow-700: #c2410c;
-  --color-yellow-800: #9a3412;
-  --color-yellow-900: #7c2d12;
+  /* Dynamic amber/gold scale */
+  --color-amber-500: var(--color-amber-500-val);
+  --color-amber-600: var(--color-amber-600-val);
+  --color-yellow-600: var(--color-yellow-600-val);
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background) !important;
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
 
 /* Global utility overrides for light-theme elements */
 
-/* Custom true white utility */
 .text-pure-white {
   color: #ffffff !important;
 }
 
 /* Screen-only overrides to keep Print Styles untouched */
 @media screen {
-  /* Swap bg-black to use the light background color on the screen */
+  /* Swap bg-black to use the dynamic background color */
   .bg-black {
     background-color: var(--background) !important;
   }
 
-  /* Force standard input/select/textarea value text to be dark */
+  /* Force inputs to match the theme text color */
   input, select, textarea {
     color: var(--color-zinc-100) !important;
   }
@@ -80,7 +114,7 @@ body {
     color: var(--color-zinc-400) !important;
   }
 
-  /* Override text-white to be dark primary text */
+  /* Override text-white to be dynamic dark primary text */
   .text-white {
     color: var(--color-zinc-100) !important;
   }
@@ -99,7 +133,7 @@ body {
     color: #ffffff !important;
   }
 
-  /* Add subtle, elegant box shadows to panels and cards in light mode */
+  /* Add subtle, elegant box shadows in light mode */
   .bg-zinc-950, .bg-zinc-900, .bg-zinc-900\/60 {
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05), 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
   }

@@ -27,8 +27,7 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Do not run code between createServerClient and getUser. A simple mistake
-  // can write difficult to debug auth issues.
+  // Do not run code between createServerClient and getUser.
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -40,45 +39,75 @@ export async function updateSession(request: NextRequest) {
     path.startsWith('/_next') ||
     path.startsWith('/api') ||
     path.includes('.') ||
-    path === '/favicon.ico'
+    path === '/favicon.ico' ||
+    path === '/sw.js'
   ) {
     return supabaseResponse
   }
 
-  // If there's an authenticated user, query their profile status
+  // Fetch profiles table for user role check
   let isApproved = false
+  let isAdmin = false
+  let isBlocked = false
+
   if (user) {
     try {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('is_approved')
+        .select('is_approved, is_admin, is_blocked')
         .eq('id', user.id)
         .single()
-      isApproved = !!profile?.is_approved
+      if (profile) {
+        isApproved = !!profile.is_approved
+        isAdmin = !!profile.is_admin
+        isBlocked = !!profile.is_blocked
+      }
     } catch (err) {
       console.error('Error fetching profile in middleware:', err)
     }
   }
 
-  // 1. Not logged in -> redirect to login
-  if (!user && !path.startsWith('/login')) {
+  // Define dashboard routes
+  const isDashboardRoute =
+    path.startsWith('/dashboard') ||
+    path.startsWith('/dishes') ||
+    path.startsWith('/ingredients') ||
+    path.startsWith('/orders') ||
+    path.startsWith('/users') ||
+    path.startsWith('/shop-admin') ||
+    path.startsWith('/shopping-list')
+
+  // Define protected B2C shop routes
+  const isProtectedShopRoute =
+    path.startsWith('/checkout') ||
+    path.startsWith('/my-account')
+
+  // Blocked users are restricted from protected checkout / account paths
+  if (user && isBlocked && isProtectedShopRoute) {
     const url = request.nextUrl.clone()
-    url.pathname = '/login'
+    url.pathname = '/'
     return NextResponse.redirect(url)
   }
 
-  // 2. Logged in
-  if (user) {
-    if (!isApproved) {
-      // Unapproved user -> force to /pending
+  // Dashboard routing rules
+  if (isDashboardRoute) {
+    if (!user) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      url.searchParams.set('redirectTo', path)
+      return NextResponse.redirect(url)
+    }
+
+    if (!isApproved && !isAdmin) {
+      // Unapproved -> redirect to pending
       if (path !== '/pending') {
         const url = request.nextUrl.clone()
         url.pathname = '/pending'
         return NextResponse.redirect(url)
       }
     } else {
-      // Approved user -> prevent accessing /pending or /login
-      if (path === '/pending' || path === '/login' || path === '/') {
+      // Approved dashboard user accessing pending -> dashboard
+      if (path === '/pending') {
         const url = request.nextUrl.clone()
         url.pathname = '/dashboard'
         return NextResponse.redirect(url)
@@ -86,10 +115,46 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  // 3. Root path mapping
-  if (path === '/') {
+  // Protected shop routing rules
+  if (isProtectedShopRoute) {
+    if (!user) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      url.searchParams.set('redirectTo', path)
+      return NextResponse.redirect(url)
+    }
+  }
+
+  // Pending page routing rules
+  if (path === '/pending') {
+    if (!user) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
+    }
+    if (isApproved || isAdmin) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
+    }
+  }
+
+  // Login page access rules
+  if (path === '/login' && user) {
+    const redirectTo = request.nextUrl.searchParams.get('redirectTo')
+    if (redirectTo) {
+      const url = request.nextUrl.clone()
+      url.pathname = redirectTo
+      url.searchParams.delete('redirectTo')
+      return NextResponse.redirect(url)
+    }
+
     const url = request.nextUrl.clone()
-    url.pathname = user ? (isApproved ? '/dashboard' : '/pending') : '/login'
+    if (isApproved || isAdmin) {
+      url.pathname = '/dashboard'
+    } else {
+      url.pathname = '/my-account'
+    }
     return NextResponse.redirect(url)
   }
 

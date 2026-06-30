@@ -16,6 +16,8 @@ import {
   Sparkles,
   Search,
 } from 'lucide-react'
+import { CustomSelect } from '@/components/ui/CustomSelect'
+import { useCustomDialogs } from '@/hooks/useCustomDialogs'
 
 interface Ingredient {
   id: string
@@ -57,6 +59,7 @@ const CATEGORIES = ["סלטים", "ראשונות", "עיקריות", "תוספ�
 
 export default function DishesPage() {
   const supabase = createClient()
+  const { showAlert, showConfirm, CustomDialogs } = useCustomDialogs()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -269,25 +272,27 @@ export default function DishesPage() {
   }
 
   // Handle Delete Dish
-  const handleDeleteDish = async (id: string) => {
-    if (!confirm('האם אתה בטוח שברצונך למחוק מנה זו? היא תמחק גם מכל האירועים המשויכים אליה.')) {
-      return
-    }
+  const handleDeleteDish = (id: string) => {
+    showConfirm(
+      'האם אתה בטוח שברצונך למחוק מנה זו? היא תמחק גם מכל האירועים המשויכים אליה.',
+      async () => {
+        try {
+          setLoading(true)
+          const { error: deleteError } = await supabase
+            .from('dishes')
+            .delete()
+            .eq('id', id)
 
-    try {
-      setLoading(true)
-      const { error: deleteError } = await supabase
-        .from('dishes')
-        .delete()
-        .eq('id', id)
-
-      if (deleteError) throw deleteError
-      fetchData()
-    } catch (err: unknown) {
-      console.error('Error deleting dish:', err)
-      setError(err instanceof Error ? err.message : 'שגיאה במחיקת המנה')
-      setLoading(false)
-    }
+          if (deleteError) throw deleteError
+          fetchData()
+        } catch (err: unknown) {
+          console.error('Error deleting dish:', err)
+          setError(err instanceof Error ? err.message : 'שגיאה במחיקת המנה')
+          setLoading(false)
+        }
+      },
+      'מחיקת מנה'
+    )
   }
 
   const getUnitLabel = (unit: string) => {
@@ -547,18 +552,12 @@ export default function DishesPage() {
                   <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
                     קטגוריה
                   </label>
-                  <select
+                  <CustomSelect
+                    options={CATEGORIES.map((cat) => ({ value: cat, label: cat }))}
                     value={dishCategory}
-                    onChange={(e) => setDishCategory(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none text-right appearance-none font-semibold"
-                  >
-                    <option value="">בחר קטגוריה...</option>
-                    <option value="סלטים">סלטים</option>
-                    <option value="ראשונות">ראשונות</option>
-                    <option value="עיקריות">עיקריות</option>
-                    <option value="תוספות">תוספות</option>
-                    <option value="קינוחים">קינוחים</option>
-                  </select>
+                    onChange={setDishCategory}
+                    placeholder="בחר קטגוריה..."
+                  />
                 </div>
               </div>
 
@@ -752,6 +751,15 @@ export default function DishesPage() {
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+      <CustomDialogs />
+      {loading && dishes.length > 0 && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-zinc-950/85 border border-zinc-900 rounded-2xl p-6 flex flex-col items-center shadow-2xl">
+            <Loader2 className="h-10 w-10 text-amber-500 animate-spin mb-4" />
+            <p className="text-zinc-200 text-sm font-bold">מעבד בקשה, אנא המתן...</p>
           </div>
         </div>
       )}

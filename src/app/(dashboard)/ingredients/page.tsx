@@ -15,6 +15,8 @@ import {
   Layers,
   Scale,
 } from 'lucide-react'
+import { CustomSelect } from '@/components/ui/CustomSelect'
+import { useCustomDialogs } from '@/hooks/useCustomDialogs'
 
 interface Ingredient {
   id: string
@@ -37,6 +39,7 @@ const INGREDIENT_CATEGORIES = [
 
 export default function IngredientsPage() {
   const supabase = createClient()
+  const { showAlert, showConfirm, CustomDialogs } = useCustomDialogs()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -138,25 +141,27 @@ export default function IngredientsPage() {
   }
 
   // Handle Delete
-  const handleDelete = async (id: string) => {
-    if (!confirm('האם אתה בטוח שברצונך למחוק חומר גלם זה? פעולה זו אינה הפיכה ותמחק אותו מכל המתכונים המשתמשים בו.')) {
-      return
-    }
+  const handleDelete = (id: string) => {
+    showConfirm(
+      'האם אתה בטוח שברצונך למחוק חומר גלם זה? פעולה זו אינה הפיכה ותמחק אותו מכל המתכונים המשתמשים בו.',
+      async () => {
+        try {
+          setLoading(true)
+          const { error: deleteError } = await supabase
+            .from('ingredients')
+            .delete()
+            .eq('id', id)
 
-    try {
-      setLoading(true)
-      const { error: deleteError } = await supabase
-        .from('ingredients')
-        .delete()
-        .eq('id', id)
-
-      if (deleteError) throw deleteError
-      fetchIngredients()
-    } catch (err: unknown) {
-      console.error('Error deleting ingredient:', err)
-      setError(err instanceof Error ? err.message : 'שגיאה במחיקת חומר הגלם')
-      setLoading(false)
-    }
+          if (deleteError) throw deleteError
+          fetchIngredients()
+        } catch (err: unknown) {
+          console.error('Error deleting ingredient:', err)
+          setError(err instanceof Error ? err.message : 'שגיאה במחיקת חומר הגלם')
+          setLoading(false)
+        }
+      },
+      'מחיקת חומר גלם'
+    )
   }
 
   // Filtered ingredients
@@ -379,31 +384,27 @@ export default function IngredientsPage() {
                     שם חומר הגלם
                   </label>
                   <div className="relative">
-                    <Layers className="absolute right-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-zinc-500" />
+                    <Layers className="absolute right-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-zinc-550" />
                     <input
                       type="text"
                       required
                       value={formName}
                       onChange={(e) => setFormName(e.target.value)}
                       placeholder="למשל: אנטריקוט בקר"
-                      className="w-full pr-10 pl-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white placeholder-zinc-600 text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none text-right"
+                      className="w-full pr-10 pl-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white placeholder-zinc-650 text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none text-right font-semibold"
                     />
                   </div>
                 </div>
-
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
                     קטגוריה
                   </label>
-                  <select
+                  <CustomSelect
+                    options={INGREDIENT_CATEGORIES.map((cat) => ({ value: cat, label: cat }))}
                     value={formCategory}
-                    onChange={(e) => setFormCategory(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none appearance-none text-right font-semibold"
-                  >
-                    {INGREDIENT_CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
+                    onChange={setFormCategory}
+                    placeholder="בחר קטגוריה..."
+                  />
                 </div>
               </div>
 
@@ -412,22 +413,19 @@ export default function IngredientsPage() {
                   <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
                     יחידת מידה
                   </label>
-                  <div className="relative">
-                    <Scale className="absolute right-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-zinc-500 pointer-events-none" />
-                    <select
-                      value={formUnit}
-                      onChange={(e) => setFormUnit(e.target.value)}
-                      className="w-full pr-10 pl-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none appearance-none text-right font-semibold"
-                    >
-                      <option value="kg">ק"ג (קילוגרם)</option>
-                      <option value="g">גרם</option>
-                      <option value="liter">ליטר</option>
-                      <option value="ml">מ"ל</option>
-                      <option value="unit">יחידה (בודד)</option>
-                    </select>
-                  </div>
+                  <CustomSelect
+                    options={[
+                      { value: 'kg', label: 'ק"ג (קילוגרם)' },
+                      { value: 'g', label: 'גרם' },
+                      { value: 'liter', label: 'ליטר' },
+                      { value: 'ml', label: 'מ"ל' },
+                      { value: 'unit', label: 'יחידה (בודד)' },
+                    ]}
+                    value={formUnit}
+                    onChange={setFormUnit}
+                    placeholder="בחר יחידה..."
+                  />
                 </div>
-
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
                     עלות ליחידה (₪)
@@ -471,6 +469,15 @@ export default function IngredientsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      <CustomDialogs />
+      {loading && ingredients.length > 0 && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-zinc-950/85 border border-zinc-900 rounded-2xl p-6 flex flex-col items-center shadow-2xl">
+            <Loader2 className="h-10 w-10 text-amber-500 animate-spin mb-4" />
+            <p className="text-zinc-200 text-sm font-bold">מעבד בקשה, אנא המתן...</p>
           </div>
         </div>
       )}

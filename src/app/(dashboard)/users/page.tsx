@@ -14,6 +14,7 @@ import {
   ShieldAlert,
   Calendar,
 } from 'lucide-react'
+import { useCustomDialogs } from '@/hooks/useCustomDialogs'
 
 interface UserProfile {
   id: string
@@ -26,6 +27,7 @@ interface UserProfile {
 export default function UsersPage() {
   const router = useRouter()
   const supabase = createClient()
+  const { showAlert, showConfirm, CustomDialogs } = useCustomDialogs()
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -83,10 +85,11 @@ export default function UsersPage() {
     try {
       const targetProfile = profiles.find((p) => p.id === profileId)
       if (targetProfile?.email === 'davidhakak19@gmail.com') {
-        alert('לא ניתן לבטל את אישור חשבון המנהל הראשי')
+        showAlert('לא ניתן לבטל את אישור חשבון המנהל הראשי', 'שגיאה', 'error')
         return
       }
 
+      setLoading(true)
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ is_approved: !currentStatus })
@@ -98,7 +101,8 @@ export default function UsersPage() {
       fetchProfiles()
     } catch (err: unknown) {
       console.error('Error updating approval status:', err)
-      alert(err instanceof Error ? err.message : 'שגיאה בעדכון הרשאות המשתמש')
+      showAlert(err instanceof Error ? err.message : 'שגיאה בעדכון הרשאות המשתמש', 'שגיאה', 'error')
+      setLoading(false)
     }
   }
 
@@ -107,10 +111,11 @@ export default function UsersPage() {
     try {
       const targetProfile = profiles.find((p) => p.id === profileId)
       if (targetProfile?.email === 'davidhakak19@gmail.com') {
-        alert('לא ניתן לבטל את תפקיד המנהל הראשי של המערכת')
+        showAlert('לא ניתן לבטל את תפקיד המנהל הראשי של המערכת', 'שגיאה', 'error')
         return
       }
 
+      setLoading(true)
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ is_admin: !currentStatus })
@@ -122,7 +127,8 @@ export default function UsersPage() {
       fetchProfiles()
     } catch (err: unknown) {
       console.error('Error updating admin status:', err)
-      alert(err instanceof Error ? err.message : 'שגיאה בעדכון הרשאות המנהל')
+      showAlert(err instanceof Error ? err.message : 'שגיאה בעדכון הרשאות המנהל', 'שגיאה', 'error')
+      setLoading(false)
     }
   }
 
@@ -274,6 +280,15 @@ export default function UsersPage() {
           </div>
         )}
       </div>
+      <CustomDialogs />
+      {loading && profiles.length > 0 && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-zinc-950/85 border border-zinc-900 rounded-2xl p-6 flex flex-col items-center shadow-2xl">
+            <Loader2 className="h-10 w-10 text-amber-500 animate-spin mb-4" />
+            <p className="text-zinc-200 text-sm font-bold">מעבד בקשה, אנא המתן...</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
