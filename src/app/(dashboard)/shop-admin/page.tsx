@@ -27,6 +27,7 @@ export default async function ShopAdminPage() {
       category: shopProducts.category,
       isVisible: shopProducts.is_visible,
       announcementText: shopProducts.announcement_text,
+      imageUrl: shopProducts.image_url,
     })
     .from(shopProducts)
     .orderBy(shopProducts.name)

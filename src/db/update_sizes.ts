@@ -7,7 +7,7 @@ async function main() {
   
   const variants = await db
     .select({
-      sizeType: shopProductVariants.sizeType,
+      sizeType: shopProductVariants.size_type,
     })
     .from(shopProductVariants)
 
