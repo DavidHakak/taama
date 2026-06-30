@@ -46,6 +46,12 @@ interface Order {
   status: string
   portions: number
   created_at: string
+  quote_base_price?: number
+  quote_starters_extra?: number
+  quote_portion_discount?: number
+  quote_global_discount?: number
+  quote_delivery_type?: string
+  quote_delivery_price?: number
   order_dishes: OrderDish[]
 }
 
@@ -72,6 +78,12 @@ export default function OrdersPage() {
           status,
           portions,
           created_at,
+          quote_base_price,
+          quote_starters_extra,
+          quote_portion_discount,
+          quote_global_discount,
+          quote_delivery_type,
+          quote_delivery_price,
           order_dishes (
             dishes (
               name,
@@ -120,6 +132,23 @@ export default function OrdersPage() {
       order.portions || 10,
       ingredientsCatalog
     ).grandTotal
+  }
+
+  const calculateOrderRevenue = (order: Order) => {
+    const basePrice = Number(order.quote_base_price || 0)
+    const startersExtra = Number(order.quote_starters_extra || 0)
+    const portionDiscount = Number(order.quote_portion_discount || 0)
+    const globalDiscount = Number(order.quote_global_discount || 0)
+    const portionsCount = Number(order.portions || 0)
+
+    const hasStarters = order.order_dishes?.some(
+      (od) => od.dishes?.category === 'ראשונות'
+    )
+
+    const finalPortionPrice = basePrice + (hasStarters ? startersExtra : 0) - portionDiscount
+    const portionsTotal = finalPortionPrice * portionsCount
+    const revenue = portionsTotal - globalDiscount
+    return revenue
   }
 
   // Delete Order
@@ -247,13 +276,16 @@ export default function OrdersPage() {
                   <th className="py-4.5 px-6">תאריך אירוע</th>
                   <th className="py-4.5 px-6">כמות מנות</th>
                   <th className="py-4.5 px-6">סטטוס</th>
-                  <th className="py-4.5 px-6">עלות רכיבים</th>
+                  <th className="py-4.5 px-6">הכנסה</th>
+                  <th className="py-4.5 px-6">רווח גולמי</th>
                   <th className="py-4.5 px-6 text-left">פעולות</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-900 text-zinc-300 text-sm">
                 {filteredOrders.map((order) => {
                   const cost = calculateOrderCost(order)
+                  const revenue = calculateOrderRevenue(order)
+                  const profit = revenue - cost
 
                   return (
                     <tr key={order.id} className="hover:bg-zinc-900/20 transition-colors">
@@ -294,8 +326,11 @@ export default function OrdersPage() {
                           {getStatusLabel(order.status)}
                         </span>
                       </td>
-                      <td className="py-5 px-6 font-black text-amber-500">
-                        ₪{cost.toFixed(2)}
+                      <td className="py-5 px-6 font-black text-emerald-400">
+                        ₪{revenue.toFixed(2)}
+                      </td>
+                      <td className={`py-5 px-6 font-black ${profit >= 0 ? 'text-amber-500' : 'text-red-500'}`}>
+                        ₪{profit.toFixed(2)}
                       </td>
                       <td className="py-5 px-6 text-left space-x-2 space-x-reverse shrink-0">
                         <Link

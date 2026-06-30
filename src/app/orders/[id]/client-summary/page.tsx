@@ -187,9 +187,14 @@ export default function ClientSummaryPage({ params }: PageProps) {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
+          .logo-bg-black {
+            background-color: #000000 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
         }
       `}</style>
-      
+
       {/* Top action header - HIDDEN during printing */}
       <header className="print:hidden h-16 border-b border-black/10 bg-black/5 backdrop-blur-md sticky top-0 z-35 flex items-center justify-between px-6 no-print">
         <Link
@@ -202,7 +207,7 @@ export default function ClientSummaryPage({ params }: PageProps) {
 
         <button
           onClick={() => window.print()}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-black text-[#D7B25D] font-bold text-xs rounded-xl shadow-lg hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer"
+          className="inline-flex items-center gap-2 px-5 py-2.5 bg-black-secondary text-[#D7B25D] font-bold text-xs rounded-xl shadow-lg hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer"
         >
           <Printer className="h-4 w-4" />
           הדפס / שמור כ-PDF
@@ -210,20 +215,20 @@ export default function ClientSummaryPage({ params }: PageProps) {
       </header>
 
       {/* Center Top black semi-circle holding the logo as-is */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-80 h-32 bg-black rounded-b-[160px] z-0 flex items-center justify-center pb-4 pt-1">
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-80 h-32 bg-black-secondary rounded-b-[160px] z-0 flex items-center justify-center pb-4 pt-1 logo-bg-black">
         <img src="/logo.png" alt="Logo" className="max-h-24 w-auto object-contain" />
       </div>
 
       {/* Main Container */}
       <main className="max-w-4xl mx-auto px-6 print:px-16 pt-48 print:pt-32 pb-16 relative z-10 space-y-12">
-        
+
         {/* Header Metadata */}
         <div className="text-center pt-6 space-y-2 relative">
           <span className="absolute top-0 right-4 text-[10px] font-black tracking-widest text-black/60 uppercase">בס"ד</span>
           <h1 className="text-3xl font-black tracking-tight text-black mt-4">קייטרינג טעמא</h1>
           <p className="text-xs font-bold uppercase tracking-wider opacity-85">קייטרינג בשרי לאירועים פרטיים ועסקיים</p>
           <p className="text-[10px] font-bold tracking-wider opacity-70">אהבה • איכות • טריות • שפע | כל המוצרים בכשרויות מהודרות</p>
-          
+
           <div className="mt-4 flex items-center justify-center gap-4 text-xs font-semibold text-black/60 font-sans">
             <span>מזהה הצעה: #{order.id.substring(0, 6)}</span>
             <span>•</span>
@@ -232,7 +237,7 @@ export default function ClientSummaryPage({ params }: PageProps) {
         </div>
 
         {/* Client details summary card */}
-        <div className="bg-black text-[#D7B25D] p-6 rounded-2xl shadow-xl grid grid-cols-1 sm:grid-cols-3 gap-6 text-right border border-black/20">
+        <div className="bg-black-secondary text-[#D7B25D] p-6 rounded-2xl shadow-xl grid grid-cols-1 sm:grid-cols-3 gap-6 text-right border border-black/20">
           <div>
             <span className="block text-[10px] font-bold text-[#D7B25D]/60 uppercase tracking-widest">שם לקוח / אירוע</span>
             <span className="text-lg font-black">{order.client_name}</span>
@@ -284,17 +289,16 @@ export default function ClientSummaryPage({ params }: PageProps) {
                     )}
                   </h3>
 
-                  <ul className={`gap-x-8 gap-y-2 print:gap-x-8 ${
-                    category === "סלטים"
-                      ? "columns-1 sm:columns-2 md:columns-3 print:columns-3"
-                      : "columns-1 sm:columns-2 print:columns-2"
-                  }`}>
+                  <ul className={`gap-x-8 gap-y-2 print:gap-x-8 ${category === "סלטים"
+                    ? "columns-1 sm:columns-2 md:columns-3 print:columns-3"
+                    : "columns-1 sm:columns-2 print:columns-2"
+                    }`}>
                     {catDishes.map((dish) => {
                       const isChecked = order.order_dishes?.some((od) => od.dishes?.id === dish.id)
 
                       return (
-                        <li 
-                          key={dish.id} 
+                        <li
+                          key={dish.id}
                           className="text-sm font-bold inline-flex items-center gap-2.5 justify-start text-black w-full break-inside-avoid py-1"
                         >
                           {isChecked ? (
@@ -318,7 +322,7 @@ export default function ClientSummaryPage({ params }: PageProps) {
         {/* Pricing calculations details */}
         <div className="border-t border-black/20 pt-8 space-y-6">
           <h2 className="text-xl font-black text-black tracking-tight">פירוט הצעת המחיר</h2>
-          
+
           <div className="bg-black/5 rounded-2xl border border-black/10 overflow-hidden">
             <table className="w-full text-right border-collapse text-sm">
               <tbody className="divide-y divide-black/10">
@@ -374,11 +378,11 @@ export default function ClientSummaryPage({ params }: PageProps) {
       </main>
 
       {/* Decorative bottom center black semi-circle footer section */}
-      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-80 h-32 bg-black rounded-t-[160px] z-0 flex flex-col items-center justify-center pb-4 pt-4 text-center print:absolute print:bottom-0 print:left-1/2 print:-translate-x-1/2">
+      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-80 h-32 bg-black-secondary rounded-t-[160px] z-0 flex flex-col items-center justify-center pb-4 pt-4 text-center print:absolute print:bottom-0 print:left-1/2 print:-translate-x-1/2 logo-bg-black">
         <div className="text-[#D7B25D] space-y-1">
-          <span className="block text-sm font-black tracking-tight">טַעֲמָא — נותנים טעם לאירוע</span>
-          <span className="block text-[10px] opacity-80 font-sans">שמחים להיות חלק מהאירוע שלכם</span>
-          <a href="tel:0583281175" className="inline-flex items-center gap-1.5 text-xs font-mono font-bold hover:underline justify-center">
+          <span className="block text-sm font-black tracking-tight text-[#D7B25D]">טַעֲמָא — נותנים טעם לאירוע</span>
+          <span className="block text-[10px] opacity-80 font-sans text-[#D7B25D]">שמחים להיות חלק מהאירוע שלכם</span>
+          <a href="tel:0583281175" className="inline-flex items-center gap-1.5 text-xs font-mono font-bold hover:underline justify-center text-[#D7B25D]">
             <Phone className="h-3.5 w-3.5" />
             <span>058-328-1175</span>
           </a>

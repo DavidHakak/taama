@@ -76,7 +76,6 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
   const [initialStatus, setInitialStatus] = useState<string | null>(null)
 
   // Modal states
-  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false)
   const [summarySelectedDishes, setSummarySelectedDishes] = useState<string[]>([])
 
   // Combobox dropdown state
@@ -209,6 +208,26 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
   }
 
   const { ingredients: aggregatedIngredients, grandTotal } = getDynamicCostDetails()
+
+  // Revenue & Profit Math
+  const basePrice = Number(quoteBasePrice || 0)
+  const startersExtra = Number(quoteStartersExtra || 0)
+  const portionDiscount = Number(quotePortionDiscount || 0)
+  const globalDiscount = Number(quoteGlobalDiscount || 0)
+  const deliveryPrice = Number(quoteDeliveryPrice || 0)
+  const deliveryType = quoteDeliveryType || 'self'
+  const portionsCount = Number(portions || 0)
+
+  const finalPortionPrice = basePrice + (hasStartersSelected ? startersExtra : 0) - portionDiscount
+  const portionsTotal = finalPortionPrice * portionsCount
+  
+  // EXCLUDE shipping from revenue
+  const quoteRevenue = portionsTotal - globalDiscount
+  const quoteShipping = deliveryType === 'delivery' ? deliveryPrice : 0
+  const quoteGrandTotal = quoteRevenue + quoteShipping // Total client payment
+
+  const expectedProfit = quoteRevenue - grandTotal // Profit excludes shipping
+  const profitMarginPercent = quoteRevenue > 0 ? (expectedProfit / quoteRevenue) * 100 : 0
 
   // Add a dish row
   const addDishRow = () => {
@@ -446,8 +465,6 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
       // Open summary page in a new window/tab
       window.open(`/orders/${finalOrderId}/client-summary`, '_blank')
 
-      setIsSummaryModalOpen(false)
-
       if (!orderId) {
         router.push(`/orders/${finalOrderId}`)
       } else {
@@ -614,6 +631,107 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
             </div>
           </div>
 
+          {/* Section 3: Pricing & Revenue */}
+          <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 shadow-xl space-y-5">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-amber-400">תמחור והכנסות מהאירוע</h2>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                  מחיר מנה בסיס (₪)
+                </label>
+                <input
+                  type="number"
+                  required
+                  disabled={isLocked}
+                  min="0"
+                  value={quoteBasePrice}
+                  onChange={(e) => setQuoteBasePrice(Math.max(0, Number(e.target.value) || 0))}
+                  placeholder="למשל: 85"
+                  className="w-full px-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none text-right font-semibold disabled:opacity-50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2 font-sans">
+                  שדרוג ראשונות
+                </label>
+                <label className={`flex items-center gap-2.5 px-4 py-3 bg-black border border-zinc-900 rounded-xl text-white text-sm select-none ${(!hasStartersSelected || isLocked) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                  <input
+                    type="checkbox"
+                    disabled={!hasStartersSelected || isLocked}
+                    checked={hasStartersSelected && quoteStartersExtra === 15}
+                    onChange={(e) => setQuoteStartersExtra(e.target.checked ? 15 : 0)}
+                    className="rounded bg-black border-zinc-900 text-amber-500 focus:ring-amber-500 h-4.5 w-4.5 cursor-pointer disabled:cursor-not-allowed"
+                  />
+                  <span className="font-bold text-xs font-sans">תוספת שדרוג (₪15 למנה)</span>
+                </label>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                  הנחה למנה (₪)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  disabled={isLocked}
+                  value={quotePortionDiscount}
+                  onChange={(e) => setQuotePortionDiscount(Math.max(0, Number(e.target.value) || 0))}
+                  placeholder="למשל: 10"
+                  className="w-full px-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none text-right font-semibold disabled:opacity-50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                  אופן אספקה
+                </label>
+                <CustomSelect
+                  options={[
+                    { value: 'self', label: 'איסוף עצמי' },
+                    { value: 'delivery', label: 'משלוח / הובלה' },
+                  ]}
+                  value={quoteDeliveryType}
+                  onChange={isLocked ? () => {} : setQuoteDeliveryType}
+                  placeholder="בחר אופן אספקה..."
+                />
+              </div>
+
+              {quoteDeliveryType === 'delivery' && (
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                    עלות משלוח (₪)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    disabled={isLocked}
+                    value={quoteDeliveryPrice}
+                    onChange={(e) => setQuoteDeliveryPrice(Math.max(0, Number(e.target.value) || 0))}
+                    placeholder="למשל: 150"
+                    className="w-full px-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none text-right font-semibold disabled:opacity-50"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                  הנחה כוללת להזמנה (₪)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  disabled={isLocked}
+                  value={quoteGlobalDiscount}
+                  onChange={(e) => setQuoteGlobalDiscount(Math.max(0, Number(e.target.value) || 0))}
+                  placeholder="למשל: 100"
+                  className="w-full px-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none text-right font-semibold disabled:opacity-50"
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Section 2: Dish Selector */}
           <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 shadow-xl space-y-5">
             <div className="flex items-center justify-between">
@@ -772,6 +890,8 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
             )}
           </div>
 
+
+
           {/* Form Actions */}
           <div className="flex items-center justify-end gap-3 pt-4">
             <button
@@ -780,13 +900,17 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                 if (isLocked) {
                   window.open(`/orders/${orderId}/client-summary`, '_blank')
                 } else {
-                  setSummarySelectedDishes(selectedDishes.filter((sd) => sd.dishId).map((sd) => sd.dishId))
-                  setIsSummaryModalOpen(true)
+                  handleSaveAndGenerateSummary()
                 }
               }}
-              className="inline-flex items-center justify-center gap-1.5 px-5 py-3 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 text-zinc-300 hover:text-white font-bold rounded-xl text-xs shadow-md transition-all cursor-pointer mr-auto ml-0"
+              disabled={saving}
+              className="inline-flex items-center justify-center gap-1.5 px-5 py-3 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 text-zinc-300 hover:text-white font-bold rounded-xl text-xs shadow-md transition-all cursor-pointer mr-auto ml-0 disabled:opacity-50"
             >
-              <span>הפקת סיכום ללקוח</span>
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <span>הפקת סיכום ללקוח</span>
+              )}
             </button>
 
             <Link
@@ -815,14 +939,67 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
         {/* Right Side: Cost Summary & Real-time Aggregation List */}
         <div className="space-y-6 text-right">
           {/* Summary Box */}
-          <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 shadow-xl relative overflow-hidden">
-            <div className="absolute top-0 left-0 p-4 opacity-5">
+          <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 shadow-xl relative overflow-hidden space-y-4">
+            <div className="absolute top-0 left-0 p-4 opacity-5 pointer-events-none">
               <DollarSign className="h-24 w-24 text-amber-500" />
             </div>
 
-            <span className="block text-xxs font-bold text-zinc-400 uppercase tracking-wider mb-1">עלות חומרי גלם מרוכזת מוערכת</span>
-            <h3 className="text-3xl font-black text-amber-500">₪{grandTotal.toFixed(2)}</h3>
-            <p className="text-xs text-zinc-400 mt-2 font-medium">מחושב בזמן אמת לפי הרכב המנות והכמויות.</p>
+            <div>
+              <span className="block text-xxs font-bold text-zinc-400 uppercase tracking-wider mb-1">מדדי רווחיות ותמחור (ללא משלוח)</span>
+              <div className="grid grid-cols-2 gap-4 mt-3">
+                <div>
+                  <span className="block text-[10px] text-zinc-500 font-semibold">סה"כ הכנסה צפויה</span>
+                  <span className="text-lg font-black text-emerald-400 font-mono">₪{quoteRevenue.toFixed(2)}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] text-zinc-500 font-semibold">עלות חומרי גלם (מזון)</span>
+                  <span className="text-lg font-black text-rose-400 font-mono">₪{grandTotal.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-zinc-900 pt-3 flex items-center justify-between">
+              <div>
+                <span className="block text-[10px] text-zinc-500 font-semibold">רווח גולמי מוערך</span>
+                <span className={`text-xl font-black font-mono ${expectedProfit >= 0 ? 'text-amber-500' : 'text-red-500'}`}>
+                  ₪{expectedProfit.toFixed(2)}
+                </span>
+              </div>
+              <div className="text-left">
+                <span className="block text-[10px] text-zinc-500 font-semibold">אחוז רווח (Margin)</span>
+                <span className={`text-base font-black font-mono ${profitMarginPercent >= 30 ? 'text-emerald-400' : profitMarginPercent >= 15 ? 'text-amber-400' : 'text-red-400'}`}>
+                  {profitMarginPercent.toFixed(1)}%
+                </span>
+              </div>
+            </div>
+
+            {/* Profit Margin Progress Bar */}
+            <div className="w-full bg-zinc-900 h-2 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-300 ${
+                  profitMarginPercent >= 30
+                    ? 'bg-emerald-500'
+                    : profitMarginPercent >= 15
+                    ? 'bg-amber-500'
+                    : 'bg-red-500'
+                }`}
+                style={{ width: `${Math.min(100, Math.max(0, profitMarginPercent))}%` }}
+              />
+            </div>
+
+            {/* Client Total and Shipping breakdown */}
+            <div className="border-t border-zinc-900 pt-3 grid grid-cols-2 gap-4">
+              <div>
+                <span className="block text-[10px] text-zinc-500 font-semibold">עלות משלוח (בנפרד)</span>
+                <span className="text-sm font-bold text-zinc-300 font-mono">
+                  {quoteShipping > 0 ? `₪${quoteShipping.toFixed(2)}` : 'אין משלוח'}
+                </span>
+              </div>
+              <div className="text-left">
+                <span className="block text-[10px] text-zinc-500 font-semibold">סה"כ לתשלום לקוח</span>
+                <span className="text-sm font-bold text-zinc-300 font-mono">₪{quoteGrandTotal.toFixed(2)}</span>
+              </div>
+            </div>
           </div>
 
           {/* Live Grocery requirements */}
@@ -858,159 +1035,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
 
       </div>
 
-      {/* Client Summary Setup Modal */}
-      {isSummaryModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" dir="rtl">
-          <div className="w-full max-w-2xl bg-zinc-950 border border-zinc-900 rounded-2xl overflow-hidden shadow-2xl relative flex flex-col max-h-[90vh]">
 
-            {/* Modal Header */}
-            <div className="h-16 flex items-center justify-between px-6 border-b border-zinc-900 bg-zinc-950/20 shrink-0">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <ClipboardList className="h-5 w-5 text-amber-500" />
-                הגדרת סיכום הזמנה ותפריט ללקוח
-              </h2>
-              <button
-                type="button"
-                onClick={() => setIsSummaryModalOpen(false)}
-                className="p-1.5 hover:bg-zinc-900 text-zinc-400 hover:text-white rounded-lg transition-all"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 text-right">
-
-              {/* Part 1: Pricing Parameters */}
-              <div className="space-y-4">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400">פרמטרי תמחור הצעת המחיר</h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-                      מחיר מנה בסיס (₪)
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min="0"
-                      value={quoteBasePrice}
-                      onChange={(e) => setQuoteBasePrice(Math.max(0, Number(e.target.value) || 0))}
-                      placeholder="למשל: 150"
-                      className="w-full px-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none text-right font-semibold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2 font-sans">
-                      שדרוג ראשונות
-                    </label>
-                    <label className={`flex items-center gap-2.5 px-4 py-3 bg-black border border-zinc-900 rounded-xl text-white text-sm select-none ${!hasStartersSelected ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                      }`}>
-                      <input
-                        type="checkbox"
-                        disabled={!hasStartersSelected}
-                        checked={hasStartersSelected && quoteStartersExtra === 15}
-                        onChange={(e) => setQuoteStartersExtra(e.target.checked ? 15 : 0)}
-                        className="rounded bg-black border-zinc-900 text-amber-500 focus:ring-amber-500 h-4.5 w-4.5 cursor-pointer disabled:cursor-not-allowed"
-                      />
-                      <span className="font-bold text-xs font-sans">תוספת שדרוג (₪15 למנה)</span>
-                    </label>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-                      הנחה למנה (₪)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={quotePortionDiscount}
-                      onChange={(e) => setQuotePortionDiscount(Math.max(0, Number(e.target.value) || 0))}
-                      placeholder="למשל: 10"
-                      className="w-full px-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none text-right font-semibold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-                      אופן אספקה
-                    </label>
-                    <CustomSelect
-                      options={[
-                        { value: 'self', label: 'איסוף עצמי' },
-                        { value: 'delivery', label: 'משלוח / הובלה' },
-                      ]}
-                      value={quoteDeliveryType}
-                      onChange={setQuoteDeliveryType}
-                      placeholder="בחר אופן אספקה..."
-                    />
-                  </div>
-
-                  {quoteDeliveryType === 'delivery' && (
-                    <div>
-                      <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-                        עלות משלוח (₪)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={quoteDeliveryPrice}
-                        onChange={(e) => setQuoteDeliveryPrice(Math.max(0, Number(e.target.value) || 0))}
-                        placeholder="למשל: 150"
-                        className="w-full px-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none text-right font-semibold"
-                      />
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-                      הנחה כוללת להזמנה (₪)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={quoteGlobalDiscount}
-                      onChange={(e) => setQuoteGlobalDiscount(Math.max(0, Number(e.target.value) || 0))}
-                      placeholder="למשל: 100"
-                      className="w-full px-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none text-right font-semibold"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Part 2: Selected Dishes Checklist removed since all database dishes are checkmarked automatically for the client summary */}
-
-            </div>
-
-            {/* Modal Footer */}
-            <div className="bg-zinc-950 border-t border-zinc-900 p-6 flex items-center justify-end gap-3 shrink-0">
-              <button
-                type="button"
-                onClick={() => setIsSummaryModalOpen(false)}
-                className="px-5 py-3 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-semibold rounded-xl text-xs transition-all cursor-pointer"
-              >
-                ביטול
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSaveAndGenerateSummary}
-                disabled={saving}
-                className="inline-flex items-center justify-center gap-1.5 px-6 py-3 bg-gradient-to-r from-yellow-600 via-amber-500 to-yellow-600 hover:from-yellow-500 hover:via-amber-600 hover:to-yellow-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-amber-500/10 transition-all cursor-pointer disabled:opacity-50"
-              >
-                {saving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Check className="h-4 w-4" />
-                )}
-                <span>שמור והפק סיכום</span>
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
       {saving && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-zinc-950/85 border border-zinc-900 rounded-2xl p-6 flex flex-col items-center shadow-2xl">
