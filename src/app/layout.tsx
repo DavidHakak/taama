@@ -13,6 +13,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL || 
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")
+  ),
   title: "קייטרינג טעמא",
   description: "מערכת ניהול ותמחור לקייטרינג טעמא",
   manifest: "/manifest.json",
@@ -24,6 +28,18 @@ export const metadata: Metadata = {
   icons: {
     icon: "/favicon.ico",
     apple: "/icon-192x192.png",
+  },
+  openGraph: {
+    title: "קייטרינג טעמא",
+    description: "מערכת ניהול ותמחור לקייטרינג טעמא",
+    siteName: "קייטרינג טעמא",
+    locale: "he_IL",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "קייטרינג טעמא",
+    description: "מערכת ניהול ותמחור לקייטרינג טעמא",
   },
 };
 
