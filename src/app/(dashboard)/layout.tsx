@@ -16,6 +16,7 @@ import {
   X,
   Smartphone,
   ShoppingBag,
+  Globe,
 } from 'lucide-react'
 import React from 'react'
 
@@ -119,6 +120,7 @@ export default function DashboardLayout({
     { name: 'ניהול חנות שבת', href: '/shop-admin', icon: ShoppingBag },
     { name: 'ריכוז קניות מאוחד', href: '/shopping-list', icon: ClipboardList },
     ...(isAdmin ? [{ name: 'ניהול משתמשים', href: '/users', icon: User }] : []),
+    { name: 'מעבר לאתר', href: '/', icon: Globe },
   ]
 
   return (
@@ -138,7 +140,7 @@ export default function DashboardLayout({
         <nav className="flex-1 p-4 space-y-1.5">
           {navItems.map((item) => {
             const Icon = item.icon
-            const isActive = pathname.startsWith(item.href)
+            const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
             return (
               <Link
                 key={item.href}
@@ -212,7 +214,7 @@ export default function DashboardLayout({
           <nav className="flex-1 p-6 space-y-3">
             {navItems.map((item) => {
               const Icon = item.icon
-              const isActive = pathname.startsWith(item.href)
+              const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
               return (
                 <Link
                   key={item.href}
