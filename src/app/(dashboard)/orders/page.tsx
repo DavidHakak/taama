@@ -52,6 +52,7 @@ interface Order {
   quote_global_discount?: number
   quote_delivery_type?: string
   quote_delivery_price?: number
+  actual_cost?: number
   order_dishes: OrderDish[]
 }
 
@@ -84,6 +85,7 @@ export default function OrdersPage() {
           quote_global_discount,
           quote_delivery_type,
           quote_delivery_price,
+          actual_cost,
           order_dishes (
             dishes (
               name,
@@ -277,21 +279,25 @@ export default function OrdersPage() {
                   <th className="py-4.5 px-6">כמות מנות</th>
                   <th className="py-4.5 px-6">סטטוס</th>
                   <th className="py-4.5 px-6">הכנסה</th>
+                  <th className="py-4.5 px-6">עלות מזון</th>
                   <th className="py-4.5 px-6">רווח גולמי</th>
                   <th className="py-4.5 px-6 text-left">פעולות</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-900 text-zinc-300 text-sm">
                 {filteredOrders.map((order) => {
-                  const cost = calculateOrderCost(order)
+                  const estCost = calculateOrderCost(order)
+                  const hasActualCost = order.actual_cost !== null && order.actual_cost !== undefined
+                  const actualCostNum = hasActualCost ? Number(order.actual_cost) : 0
+                  const costToUse = hasActualCost ? actualCostNum : estCost
                   const revenue = calculateOrderRevenue(order)
-                  const profit = revenue - cost
+                  const profit = revenue - costToUse
 
                   return (
                     <tr key={order.id} className="hover:bg-zinc-900/20 transition-colors">
                       <td className="py-5 px-6">
                         {order.status === 'Paid' ? (
-                          <span className="font-bold text-zinc-450 text-zinc-400 block cursor-default">
+                          <span className="font-bold text-zinc-400 block cursor-default">
                             {order.client_name}
                           </span>
                         ) : (
@@ -326,11 +332,37 @@ export default function OrdersPage() {
                           {getStatusLabel(order.status)}
                         </span>
                       </td>
-                      <td className="py-5 px-6 font-black text-emerald-400">
+                      <td className="py-5 px-6 font-black text-emerald-450 text-emerald-400">
                         ₪{revenue.toFixed(2)}
                       </td>
+                      <td className="py-5 px-6">
+                        {hasActualCost ? (
+                          <div className="space-y-1 text-right justify-start">
+                            <span className="font-bold text-rose-400 font-mono block">₪{actualCostNum.toFixed(2)}</span>
+                            {(() => {
+                              const diff = estCost - actualCostNum
+                              const isSaving = diff >= 0
+                              return (
+                                <span className={`text-[10px] font-extrabold block ${isSaving ? 'text-emerald-455 text-emerald-400' : 'text-rose-400'}`}>
+                                  {isSaving ? 'חיסכון:' : 'חריגה:'} ₪{Math.abs(diff).toFixed(0)}
+                                </span>
+                              )
+                            })()}
+                          </div>
+                        ) : (
+                          <div className="space-y-0.5 text-right justify-start">
+                            <span className="font-semibold text-zinc-450 text-zinc-400 font-mono block">₪{estCost.toFixed(2)}</span>
+                            <span className="text-[10px] text-zinc-550 text-zinc-500 font-semibold block">(משוער)</span>
+                          </div>
+                        )}
+                      </td>
                       <td className={`py-5 px-6 font-black ${profit >= 0 ? 'text-amber-500' : 'text-red-500'}`}>
-                        ₪{profit.toFixed(2)}
+                        <div className="space-y-0.5">
+                          <span className="font-mono">₪{profit.toFixed(2)}</span>
+                          {hasActualCost && (
+                            <span className="text-[10px] text-zinc-500 font-bold block">(עלות בפועל)</span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-5 px-6 text-left space-x-2 space-x-reverse shrink-0">
                         <Link

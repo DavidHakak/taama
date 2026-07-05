@@ -43,8 +43,8 @@ export default async function StorefrontPage() {
         <div className="text-amber-500 font-extrabold text-5xl mb-4">🏠</div>
         <h2 className="text-xl font-bold text-white mb-2">אין מכירה פעילה כרגע</h2>
         <p className="text-zinc-400 text-sm max-w-md">
-          כרגע לא פתוח חלון הזמנות פעיל לשבת או חג. 
-          מנהלי הקייטרינג יפתחו את המכירה לקראת סוף השבוע, אנא חזרו לבקר בהמשך!
+          כרגע לא פתוח חלון הזמנות פעיל לשבת או חג.
+          מנהלי הקייטרינג יפתחו את המכירה בתחילת השבוע אנא חזרו לבקר בהמשך!
         </p>
       </div>
     )

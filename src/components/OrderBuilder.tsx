@@ -72,6 +72,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
   const [quoteGlobalDiscount, setQuoteGlobalDiscount] = useState<number>(0)
   const [quoteDeliveryType, setQuoteDeliveryType] = useState<string>('self')
   const [quoteDeliveryPrice, setQuoteDeliveryPrice] = useState<number>(0)
+  const [actualCost, setActualCost] = useState<number | ''>('')
 
   const [initialStatus, setInitialStatus] = useState<string | null>(null)
 
@@ -150,6 +151,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
               quote_global_discount,
               quote_delivery_type,
               quote_delivery_price,
+              actual_cost,
               order_dishes (
                 dish_id
               )
@@ -171,6 +173,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
           setQuoteGlobalDiscount(Number(orderData.quote_global_discount || 0))
           setQuoteDeliveryType(orderData.quote_delivery_type || 'self')
           setQuoteDeliveryPrice(Number(orderData.quote_delivery_price || 0))
+          setActualCost(orderData.actual_cost !== null && orderData.actual_cost !== undefined ? Number(orderData.actual_cost) : '')
 
           const mappedDishes = orderData.order_dishes?.map((od: any) => od.dish_id) || []
           setSelectedDishes(mappedDishes.map((id: string) => ({ dishId: id })))
@@ -226,7 +229,8 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
   const quoteShipping = deliveryType === 'delivery' ? deliveryPrice : 0
   const quoteGrandTotal = quoteRevenue + quoteShipping // Total client payment
 
-  const expectedProfit = quoteRevenue - grandTotal // Profit excludes shipping
+  const costToUse = actualCost !== '' ? Number(actualCost) : grandTotal
+  const expectedProfit = quoteRevenue - costToUse // Profit excludes shipping
   const profitMarginPercent = quoteRevenue > 0 ? (expectedProfit / quoteRevenue) * 100 : 0
 
   // Add a dish row
@@ -331,6 +335,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
         quote_global_discount: quoteGlobalDiscount,
         quote_delivery_type: quoteDeliveryType,
         quote_delivery_price: quoteDeliveryPrice,
+        actual_cost: actualCost === '' ? null : Number(actualCost),
       }
 
       if (orderId) {
@@ -415,6 +420,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
         quote_global_discount: quoteGlobalDiscount,
         quote_delivery_type: quoteDeliveryType,
         quote_delivery_price: quoteDeliveryPrice,
+        actual_cost: actualCost === '' ? null : Number(actualCost),
       }
 
       if (orderId) {
@@ -729,7 +735,56 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                   className="w-full px-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none text-right font-semibold disabled:opacity-50"
                 />
               </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2 font-sans">
+                  עלות מזון בפועל (₪)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={actualCost}
+                  onChange={(e) => setActualCost(e.target.value === '' ? '' : Math.max(0, Number(e.target.value) || 0))}
+                  placeholder="עלות אמיתית..."
+                  className="w-full px-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none text-right font-semibold"
+                />
+              </div>
             </div>
+
+            {actualCost !== '' && (
+              <div className="mt-4 p-4 bg-zinc-900/20 border border-zinc-900 rounded-xl space-y-2">
+                <h3 className="text-xs font-bold text-zinc-300">השוואת עלויות רכש (משוער מול בפועל)</h3>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
+                  <div className="space-y-1">
+                    <span className="text-zinc-400 block font-sans">חיסכון / חריגה מהתקציב:</span>
+                    {(() => {
+                      const diff = grandTotal - Number(actualCost)
+                      const isSaving = diff >= 0
+                      const percent = grandTotal > 0 ? (Math.abs(diff) / grandTotal) * 100 : 0
+                      return (
+                        <div className={`text-sm font-black flex items-center gap-1.5 ${isSaving ? 'text-emerald-400' : 'text-red-400'}`}>
+                          <span>₪{Math.abs(diff).toFixed(2)}</span>
+                          <span>({isSaving ? 'חיסכון' : 'חריגה'} של {percent.toFixed(1)}%)</span>
+                        </div>
+                      )
+                    })()}
+                  </div>
+                  <div className="flex-1 max-w-xs bg-zinc-900 h-2 rounded-full overflow-hidden relative">
+                    {(() => {
+                      const actualNum = Number(actualCost)
+                      const ratio = grandTotal > 0 ? Math.min(100, (actualNum / grandTotal) * 100) : 0
+                      const isOver = actualNum > grandTotal
+                      return (
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${isOver ? 'bg-red-500' : 'bg-emerald-500'}`}
+                          style={{ width: `${ratio}%` }}
+                        />
+                      )
+                    })()}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Section 2: Dish Selector */}
@@ -919,7 +974,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
             >
               חזרה להזמנות
             </Link>
-            {!isLocked && (
+            {(!isLocked || orderId !== undefined) && (
               <button
                 type="submit"
                 disabled={saving}
@@ -930,7 +985,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                 ) : (
                   <Check className="h-4 w-4" />
                 )}
-                <span>{orderId ? 'שמור שינויים' : 'צור הזמנה'}</span>
+                <span>{isLocked ? 'עדכן עלות בפועל' : (orderId ? 'שמור שינויים' : 'צור הזמנה')}</span>
               </button>
             )}
           </div>
@@ -945,28 +1000,43 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
             </div>
 
             <div>
-              <span className="block text-xxs font-bold text-zinc-400 uppercase tracking-wider mb-1">מדדי רווחיות ותמחור (ללא משלוח)</span>
+              <span className="block text-xxs font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                {actualCost !== '' ? 'מדדי רווחיות ותמחור בפועל (ללא משלוח)' : 'מדדי רווחיות ותמחור מוערכים (ללא משלוח)'}
+              </span>
               <div className="grid grid-cols-2 gap-4 mt-3">
                 <div>
                   <span className="block text-[10px] text-zinc-500 font-semibold">סה"כ הכנסה צפויה</span>
                   <span className="text-lg font-black text-emerald-400 font-mono">₪{quoteRevenue.toFixed(2)}</span>
                 </div>
                 <div>
-                  <span className="block text-[10px] text-zinc-500 font-semibold">עלות חומרי גלם (מזון)</span>
-                  <span className="text-lg font-black text-rose-400 font-mono">₪{grandTotal.toFixed(2)}</span>
+                  <span className="block text-[10px] text-zinc-500 font-semibold">
+                    {actualCost !== '' ? 'עלות מזון בפועל' : 'עלות חומרי גלם (משוער)'}
+                  </span>
+                  <span className="text-lg font-black text-rose-400 font-mono">
+                    ₪{costToUse.toFixed(2)}
+                  </span>
+                  {actualCost !== '' && (
+                    <span className="block text-[9px] text-zinc-500">
+                      משוער: ₪{grandTotal.toFixed(2)}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
 
             <div className="border-t border-zinc-900 pt-3 flex items-center justify-between">
               <div>
-                <span className="block text-[10px] text-zinc-500 font-semibold">רווח גולמי מוערך</span>
+                <span className="block text-[10px] text-zinc-500 font-semibold">
+                  {actualCost !== '' ? 'רווח גולמי בפועל' : 'רווח גולמי מוערך'}
+                </span>
                 <span className={`text-xl font-black font-mono ${expectedProfit >= 0 ? 'text-amber-500' : 'text-red-500'}`}>
                   ₪{expectedProfit.toFixed(2)}
                 </span>
               </div>
               <div className="text-left">
-                <span className="block text-[10px] text-zinc-500 font-semibold">אחוז רווח (Margin)</span>
+                <span className="block text-[10px] text-zinc-500 font-semibold">
+                  {actualCost !== '' ? 'אחוז רווח בפועל' : 'אחוז רווח מוערך'}
+                </span>
                 <span className={`text-base font-black font-mono ${profitMarginPercent >= 30 ? 'text-emerald-400' : profitMarginPercent >= 15 ? 'text-amber-400' : 'text-red-400'}`}>
                   {profitMarginPercent.toFixed(1)}%
                 </span>

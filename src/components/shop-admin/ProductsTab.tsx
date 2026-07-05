@@ -2,25 +2,28 @@
 
 import React, { useState } from 'react'
 import { Plus, Edit2, Trash2 } from 'lucide-react'
-import { useCustomDialogs } from '@/hooks/useCustomDialogs'
 import { deleteShopProduct } from '@/app/(dashboard)/shop-admin/actions'
+import { useRouter } from 'next/navigation'
 import { Product, Ingredient, CATEGORIES } from './types'
 import ProductModal from './ProductModal'
+import { useAdminPage } from './AdminPageClient'
 
 interface ProductsTabProps {
   products: Product[]
   ingredientsList: Ingredient[]
   dynamicSizeTypes: string[]
-  setGlobalLoading: (loading: boolean) => void
+  setGlobalLoading?: (loading: boolean) => void
 }
 
 export default function ProductsTab({
   products,
   ingredientsList,
   dynamicSizeTypes,
-  setGlobalLoading,
+  setGlobalLoading: propSetGlobalLoading,
 }: ProductsTabProps) {
-  const { showAlert, showConfirm } = useCustomDialogs()
+  const { setGlobalLoading: contextSetGlobalLoading, showAlert, showConfirm } = useAdminPage()
+  const setGlobalLoading = propSetGlobalLoading || contextSetGlobalLoading
+  const router = useRouter()
 
   // Modal State
   const [isProductModalOpen, setIsProductModalOpen] = useState(false)
@@ -151,12 +154,20 @@ export default function ProductsTab({
                             onClick={() => {
                               showConfirm(`האם למחוק את ${p.name} מהחנות לצמיתות?`, async () => {
                                 setGlobalLoading(true)
-                                const res = await deleteShopProduct(p.id)
-                                setGlobalLoading(false)
-                                if (res.success && res.message) {
-                                  showAlert(res.message, 'מידע')
-                                } else if (!res.success) {
-                                  showAlert(res.error || 'שגיאה במהלך מחיקת המוצר', 'שגיאה', 'error')
+                                try {
+                                  const res = await deleteShopProduct(p.id)
+                                  if (res.success) {
+                                    if (res.message) {
+                                      showAlert(res.message, 'מידע')
+                                    }
+                                    router.refresh()
+                                  } else {
+                                    showAlert(res.error || 'שגיאה במהלך מחיקת המוצר', 'שגיאה', 'error')
+                                  }
+                                } catch (err: any) {
+                                  showAlert(err.message || 'שגיאה במהלך מחיקת המוצר', 'שגיאה', 'error')
+                                } finally {
+                                  setGlobalLoading(false)
                                 }
                               })
                             }}
@@ -276,12 +287,20 @@ export default function ProductsTab({
                             onClick={() => {
                               showConfirm(`האם למחוק את ${p.name} מהחנות לצמיתות?`, async () => {
                                 setGlobalLoading(true)
-                                const res = await deleteShopProduct(p.id)
-                                setGlobalLoading(false)
-                                if (res.success && res.message) {
-                                  showAlert(res.message, 'מידע')
-                                } else if (!res.success) {
-                                  showAlert(res.error || 'שגיאה במהלך מחיקת המוצר', 'שגיאה', 'error')
+                                try {
+                                  const res = await deleteShopProduct(p.id)
+                                  if (res.success) {
+                                    if (res.message) {
+                                      showAlert(res.message, 'מידע')
+                                    }
+                                    router.refresh()
+                                  } else {
+                                    showAlert(res.error || 'שגיאה במהלך מחיקת המוצר', 'שגיאה', 'error')
+                                  }
+                                } catch (err: any) {
+                                  showAlert(err.message || 'שגיאה במהלך מחיקת המוצר', 'שגיאה', 'error')
+                                } finally {
+                                  setGlobalLoading(false)
                                 }
                               })
                             }}
@@ -308,6 +327,7 @@ export default function ProductsTab({
         product={selectedProduct}
         ingredientsList={ingredientsList}
         dynamicSizeTypes={dynamicSizeTypes}
+        setGlobalLoading={setGlobalLoading}
       />
     </div>
   )

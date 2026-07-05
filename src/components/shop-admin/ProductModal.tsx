@@ -3,9 +3,10 @@
 import React, { useState, useEffect } from 'react'
 import { Tag, X, Trash2, PlusCircle, MinusCircle, Loader2 } from 'lucide-react'
 import { CustomSelect } from '@/components/ui/CustomSelect'
-import { useCustomDialogs } from '@/hooks/useCustomDialogs'
 import { createShopProduct, updateShopProduct } from '@/app/(dashboard)/shop-admin/actions'
+import { useRouter } from 'next/navigation'
 import { Ingredient, Product, ProductIngredient, CATEGORIES, INGREDIENT_CATEGORIES, getUnitLabel } from './types'
+import { useAdminPage } from './AdminPageClient'
 
 interface ProductModalProps {
   isOpen: boolean
@@ -14,6 +15,7 @@ interface ProductModalProps {
   product: Product | null
   ingredientsList: Ingredient[]
   dynamicSizeTypes: string[]
+  setGlobalLoading: (loading: boolean) => void
 }
 
 interface FormVariant {
@@ -31,8 +33,10 @@ export default function ProductModal({
   product,
   ingredientsList,
   dynamicSizeTypes,
+  setGlobalLoading,
 }: ProductModalProps) {
-  const { showAlert, showConfirm } = useCustomDialogs()
+  const { showAlert, showConfirm } = useAdminPage()
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -157,16 +161,19 @@ export default function ProductModal({
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setGlobalLoading(true)
 
     if (!prodName.trim()) {
       setError('אנא הזן שם מוצר תקין')
       setLoading(false)
+      setGlobalLoading(false)
       return
     }
 
     if (formVariants.length === 0) {
       setError('יש להגדיר לפחות מידה אחת (וריאנט) עבור המוצר')
       setLoading(false)
+      setGlobalLoading(false)
       return
     }
 
@@ -176,6 +183,7 @@ export default function ProductModal({
       if (isNaN(priceNum) || priceNum <= 0) {
         setError(`המחיר עבור מידה ${v.sizeType} חייב להיות מספר חיובי גדול מ-0`)
         setLoading(false)
+        setGlobalLoading(false)
         return
       }
     }
@@ -190,33 +198,44 @@ export default function ProductModal({
       })),
     }))
 
-    let res
-    if (mode === 'create') {
-      res = await createShopProduct({
-        name: prodName.trim(),
-        category: prodCategory,
-        announcementText: prodAnnouncement.trim() || null,
-        imageUrl: prodImageUrl.trim() || null,
-        variants: payloadVariants,
-      })
-    } else {
-      if (!product) return
-      res = await updateShopProduct(product.id, {
-        name: prodName.trim(),
-        category: prodCategory,
-        announcementText: prodAnnouncement.trim() || null,
-        imageUrl: prodImageUrl.trim() || null,
-        isVisible: prodVisible,
-        variants: payloadVariants,
-      })
-    }
+    try {
+      let res
+      if (mode === 'create') {
+        res = await createShopProduct({
+          name: prodName.trim(),
+          category: prodCategory,
+          announcementText: prodAnnouncement.trim() || null,
+          imageUrl: prodImageUrl.trim() || null,
+          variants: payloadVariants,
+        })
+      } else {
+        if (!product) {
+          setLoading(false)
+          setGlobalLoading(false)
+          return
+        }
+        res = await updateShopProduct(product.id, {
+          name: prodName.trim(),
+          category: prodCategory,
+          announcementText: prodAnnouncement.trim() || null,
+          imageUrl: prodImageUrl.trim() || null,
+          isVisible: prodVisible,
+          variants: payloadVariants,
+        })
+      }
 
-    if (res.success) {
-      onClose()
-    } else {
-      setError(res.error)
+      if (res.success) {
+        onClose()
+        router.refresh()
+      } else {
+        setError(res.error)
+      }
+    } catch (err: any) {
+      setError(err.message || 'שגיאה בעיבוד הבקשה')
+    } finally {
+      setLoading(false)
+      setGlobalLoading(false)
     }
-    setLoading(false)
   }
 
   return (

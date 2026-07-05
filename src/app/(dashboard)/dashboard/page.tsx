@@ -51,6 +51,7 @@ interface Order {
   quote_global_discount?: number
   quote_delivery_type?: string
   quote_delivery_price?: number
+  actual_cost?: number
   order_dishes: OrderDish[]
 }
 
@@ -85,6 +86,7 @@ export default function DashboardPage() {
             quote_global_discount,
             quote_delivery_type,
             quote_delivery_price,
+            actual_cost,
             order_dishes (
               dishes (
                 id,
@@ -163,9 +165,12 @@ export default function DashboardPage() {
     return revenue
   }
 
-  // Analytics Calculations
-  const completedOrders = orders.filter((o) => o.status === 'Completed' || o.status === 'Paid')
-  const totalCostCompleted = completedOrders.reduce((sum, o) => sum + calculateOrderCost(o), 0)
+  // Analytics Calculations (Include Confirmed, Completed, and Paid orders)
+  const completedOrders = orders.filter((o) => o.status === 'Completed' || o.status === 'Paid' || o.status === 'Confirmed')
+  const totalCostCompleted = completedOrders.reduce((sum, o) => {
+    const actCost = o.actual_cost !== null && o.actual_cost !== undefined ? Number(o.actual_cost) : null
+    return sum + (actCost !== null ? actCost : calculateOrderCost(o))
+  }, 0)
   const totalRevenueCompleted = completedOrders.reduce((sum, o) => sum + calculateOrderRevenue(o), 0)
   const totalProfitCompleted = totalRevenueCompleted - totalCostCompleted
 
@@ -230,7 +235,8 @@ export default function DashboardPage() {
       const key = `${year}-${month}`
 
       const rev = calculateOrderRevenue(order)
-      const cost = calculateOrderCost(order)
+      const actCost = order.actual_cost !== null && order.actual_cost !== undefined ? Number(order.actual_cost) : null
+      const cost = actCost !== null ? actCost : calculateOrderCost(order)
 
       if (monthlyMap[key]) {
         monthlyMap[key].revenue += rev
@@ -323,10 +329,10 @@ export default function DashboardPage() {
           <div className="absolute top-0 left-0 p-4 opacity-10">
             <DollarSign className="h-16 w-16 text-emerald-500" />
           </div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1">הכנסות מאירועים שהושלמו</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1">הכנסות מאירועים פעילים</p>
           <h3 className="text-2xl font-black text-emerald-450 text-emerald-400 font-mono">₪{totalRevenueCompleted.toFixed(2)}</h3>
           <p className="text-xs text-zinc-500 mt-2 flex items-center gap-1 font-medium justify-start">
-            מתוך {completedOrders.length} אירועים שהושלמו
+            מתוך {completedOrders.length} אירועים פעילים
           </p>
         </div>
 
@@ -337,7 +343,7 @@ export default function DashboardPage() {
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1">עלות חומרי גלם (מזון)</p>
           <h3 className="text-2xl font-black text-rose-400 font-mono">₪{totalCostCompleted.toFixed(2)}</h3>
           <p className="text-xs text-zinc-500 mt-2 flex items-center gap-1 font-medium justify-start">
-            מתוך {completedOrders.length} אירועים שהושלמו
+            מתוך {completedOrders.length} אירועים פעילים
           </p>
         </div>
 
@@ -345,7 +351,7 @@ export default function DashboardPage() {
           <div className="absolute top-0 left-0 p-4 opacity-10">
             <TrendingUp className="h-16 w-16 text-amber-500" />
           </div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1">רווח גולמי מושלם</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-1">רווח גולמי מצטבר</p>
           <h3 className={`text-2xl font-black font-mono ${totalProfitCompleted >= 0 ? 'text-amber-500' : 'text-red-500'}`}>
             ₪{totalProfitCompleted.toFixed(2)}
           </h3>
@@ -535,6 +541,8 @@ export default function DashboardPage() {
             ) : (
               upcomingOrders.map((order) => {
                 const orderCost = calculateOrderCost(order)
+                const actCost = order.actual_cost !== null && order.actual_cost !== undefined ? Number(order.actual_cost) : null
+                const orderCostToUse = actCost !== null ? actCost : orderCost
                 return (
                   <div
                     key={order.id}
@@ -561,7 +569,7 @@ export default function DashboardPage() {
                         <span className="block text-xxs text-zinc-400 font-semibold uppercase">הכנסה / עלות רכיבים</span>
                         <span className="text-sm font-bold text-emerald-400 font-mono">₪{calculateOrderRevenue(order).toFixed(2)}</span>
                         <span className="text-zinc-500 text-xs mx-1">/</span>
-                        <span className="text-sm font-bold text-zinc-400 font-mono">₪{orderCost.toFixed(2)}</span>
+                        <span className="text-sm font-bold text-zinc-400 font-mono">₪{orderCostToUse.toFixed(2)}</span>
                       </div>
 
                       <div className="flex items-center gap-3">

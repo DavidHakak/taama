@@ -3,20 +3,25 @@
 import React, { useState } from 'react'
 import { Plus, Edit2, Trash2 } from 'lucide-react'
 import { togglePromotionStatus, deleteShopPromotion } from '@/app/(dashboard)/shop-admin/actions'
+import { useRouter } from 'next/navigation'
 import { Promotion } from './types'
 import PromotionModal from './PromotionModal'
+import { useAdminPage } from './AdminPageClient'
 
 interface PromotionsTabProps {
   promotions: Promotion[]
   dynamicSizeTypes: string[]
-  setGlobalLoading: (loading: boolean) => void
+  setGlobalLoading?: (loading: boolean) => void
 }
 
 export default function PromotionsTab({
   promotions,
   dynamicSizeTypes,
-  setGlobalLoading,
+  setGlobalLoading: propSetGlobalLoading,
 }: PromotionsTabProps) {
+  const { setGlobalLoading: contextSetGlobalLoading } = useAdminPage()
+  const setGlobalLoading = propSetGlobalLoading || contextSetGlobalLoading
+  const router = useRouter()
   // Modal State
   const [isPromoModalOpen, setIsPromoModalOpen] = useState(false)
   const [promoModalMode, setPromoModalMode] = useState<'create' | 'edit'>('create')
@@ -78,8 +83,16 @@ export default function PromotionsTab({
                   <button
                     onClick={async () => {
                       setGlobalLoading(true)
-                      await togglePromotionStatus(promo.id, !promo.is_active)
-                      setGlobalLoading(false)
+                      try {
+                        const res = await togglePromotionStatus(promo.id, !promo.is_active)
+                        if (res && res.success) {
+                          router.refresh()
+                        }
+                      } catch (err) {
+                        console.error(err)
+                      } finally {
+                        setGlobalLoading(false)
+                      }
                     }}
                     className={`inline-flex px-3 py-1.5 border rounded-lg text-xs font-bold transition-all cursor-pointer ${promo.is_active
                       ? 'bg-rose-500/5 hover:bg-rose-500/10 border-rose-500/10 text-rose-400'
@@ -99,8 +112,16 @@ export default function PromotionsTab({
                     onClick={async () => {
                       if (confirm(`האם למחוק סופית את המבצע "${promo.name}"?`)) {
                         setGlobalLoading(true)
-                        await deleteShopPromotion(promo.id)
-                        setGlobalLoading(false)
+                        try {
+                          const res = await deleteShopPromotion(promo.id)
+                          if (res && res.success) {
+                            router.refresh()
+                          }
+                        } catch (err) {
+                          console.error(err)
+                        } finally {
+                          setGlobalLoading(false)
+                        }
                       }
                     }}
                     className="inline-flex p-2 bg-zinc-900 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 rounded-lg transition-all cursor-pointer"
@@ -121,6 +142,7 @@ export default function PromotionsTab({
         mode={promoModalMode}
         promotion={selectedPromotion}
         dynamicSizeTypes={dynamicSizeTypes}
+        setGlobalLoading={setGlobalLoading}
       />
     </div>
   )

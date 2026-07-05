@@ -2,20 +2,23 @@
 
 import React, { useState } from 'react'
 import { Settings } from 'lucide-react'
-import { useCustomDialogs } from '@/hooks/useCustomDialogs'
 import { saveStoreSettings } from '@/app/(dashboard)/shop-admin/actions'
+import { useRouter } from 'next/navigation'
+import { useAdminPage } from './AdminPageClient'
 
 interface SettingsTabProps {
   settings?: { key: string; value: string }[]
-  setGlobalLoading: (loading: boolean) => void
+  setGlobalLoading?: (loading: boolean) => void
 }
 
 export default function SettingsTab({
   settings,
-  setGlobalLoading,
+  setGlobalLoading: propSetGlobalLoading,
 }: SettingsTabProps) {
-  const { showAlert } = useCustomDialogs()
+  const { setGlobalLoading: contextSetGlobalLoading, showAlert } = useAdminPage()
+  const setGlobalLoading = propSetGlobalLoading || contextSetGlobalLoading
   const [loading, setLoading] = useState(false)
+  const router = useRouter()
 
   // Store settings state fields
   const [pickupAddress, setPickupAddress] = useState(() => {
@@ -50,14 +53,20 @@ export default function SettingsTab({
       return
     }
 
-    const res = await saveStoreSettings(pickupAddress, pickupHours, cutoff, pickupPhone, pickupEmail, availableSizesInput)
-    if (res.success) {
-      showAlert('הגדרות החנות נשמרו בהצלחה', 'הצלחה', 'success')
-    } else {
-      showAlert(res.error || 'שגיאה בשמירת ההגדרות', 'שגיאה', 'error')
+    try {
+      const res = await saveStoreSettings(pickupAddress, pickupHours, cutoff, pickupPhone, pickupEmail, availableSizesInput)
+      if (res.success) {
+        showAlert('הגדרות החנות נשמרו בהצלחה', 'הצלחה', 'success')
+        router.refresh()
+      } else {
+        showAlert(res.error || 'שגיאה בשמירת ההגדרות', 'שגיאה', 'error')
+      }
+    } catch (err: any) {
+      showAlert(err.message || 'שגיאה בשמירת ההגדרות', 'שגיאה', 'error')
+    } finally {
+      setLoading(false)
+      setGlobalLoading(false)
     }
-    setLoading(false)
-    setGlobalLoading(false)
   }
 
   return (

@@ -17,6 +17,15 @@ import {
   Smartphone,
   ShoppingBag,
   Globe,
+  Tag,
+  Percent,
+  Gift,
+  Settings,
+  Users,
+  TrendingUp,
+  ChevronDown,
+  ChevronUp,
+  Calendar,
 } from 'lucide-react'
 import React from 'react'
 
@@ -36,6 +45,27 @@ export default function DashboardLayout({
   const [showInstallBtn, setShowInstallBtn] = useState(false)
   const [isIOS, setIsIOS] = useState(false)
   const [showIOSInstruction, setShowIOSInstruction] = useState(false)
+
+  // Accordion open states (all closed by default)
+  const [openAccordions, setOpenAccordions] = useState<Record<string, boolean>>({
+    catering: false,
+    shabbat: false,
+    procurement: false,
+    management: false,
+  })
+
+  const toggleAccordion = (key: string) => {
+    setOpenAccordions((prev) => {
+      const isCurrentlyOpen = !!prev[key]
+      return {
+        catering: false,
+        shabbat: false,
+        procurement: false,
+        management: false,
+        [key]: !isCurrentlyOpen,
+      }
+    })
+  }
 
   useEffect(() => {
     const getSession = async () => {
@@ -112,16 +142,81 @@ export default function DashboardLayout({
     router.refresh()
   }
 
-  const navItems = [
-    { name: 'לוח בקרה', href: '/dashboard', icon: LayoutDashboard },
+  const cateringItems = [
     { name: 'רכיבים ומלאי', href: '/ingredients', icon: Beef },
     { name: 'מנות ומתכונים', href: '/dishes', icon: UtensilsCrossed },
     { name: 'הזמנות ואירועים', href: '/orders', icon: ClipboardList },
-    { name: 'ניהול חנות שבת', href: '/shop-admin', icon: ShoppingBag },
-    { name: 'ריכוז קניות מאוחד', href: '/shopping-list', icon: ClipboardList },
-    ...(isAdmin ? [{ name: 'ניהול משתמשים', href: '/users', icon: User }] : []),
-    { name: 'מעבר לאתר', href: '/', icon: Globe },
   ]
+
+  const shabbatItems = [
+    { name: 'הזמנות חנות', href: '/shop-admin/orders', icon: ShoppingBag },
+    { name: 'ניהול מוצרים', href: '/shop-admin/products', icon: Tag },
+    { name: 'ניהול מבצעים', href: '/shop-admin/promotions', icon: Percent },
+    { name: 'קודי קופון', href: '/shop-admin/coupons', icon: Gift },
+    { name: 'אירועי מכירה', href: '/shop-admin/events', icon: Calendar },
+    { name: 'ניהול לקוחות', href: '/shop-admin/customers', icon: Users },
+    { name: 'הגדרות חנות', href: '/shop-admin/settings', icon: Settings },
+  ]
+
+  const procurementItems = [
+    { name: 'ריכוז קניות מאוחד', href: '/shopping-list', icon: ClipboardList },
+  ]
+
+  const managementItems = [
+    ...(isAdmin ? [{ name: 'ניהול משתמשים', href: '/users', icon: User }] : []),
+    { name: 'אנליטיקות וסטטיסטיקות', href: '/analytics', icon: TrendingUp },
+  ]
+
+  const renderAccordionSection = (
+    key: string,
+    title: string,
+    items: { name: string; href: string; icon: any }[],
+    isOpen: boolean,
+    onToggle: () => void,
+    isMobile: boolean = false
+  ) => {
+    if (items.length === 0) return null
+
+    return (
+      <div key={key} className="space-y-1">
+        {/* Accordion Toggle Header */}
+        <button
+          type="button"
+          onClick={onToggle}
+          className="w-full flex items-center justify-between px-4 py-2 text-zinc-500 hover:text-zinc-300 text-xxs font-extrabold uppercase tracking-wider transition-colors cursor-pointer select-none text-right outline-none"
+        >
+          <span>{title}</span>
+          {isOpen ? <ChevronUp className="h-3.5 w-3.5 text-zinc-650" /> : <ChevronDown className="h-3.5 w-3.5 text-zinc-650" />}
+        </button>
+
+        {/* Accordion Content */}
+        {isOpen && (
+          <div className="space-y-1 mr-3 pr-2 border-r border-zinc-900/60 animate-in slide-in-from-top-1 duration-150">
+            {items.map((item) => {
+              const Icon = item.icon
+              const isActive = pathname.startsWith(item.href)
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => {
+                    if (isMobile) setMobileMenuOpen(false)
+                  }}
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${isActive
+                    ? 'bg-gradient-to-l from-yellow-600/10 to-amber-500/10 text-amber-500 border-r-2 border-amber-500 pr-2 pl-3'
+                    : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/40'
+                    }`}
+                >
+                  <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-amber-500' : 'text-zinc-400'}`} />
+                  <span>{item.name}</span>
+                </Link>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-screen bg-black text-zinc-100 font-sans relative" dir="rtl">
@@ -137,24 +232,33 @@ export default function DashboardLayout({
           </div>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1.5">
-          {navItems.map((item) => {
-            const Icon = item.icon
-            const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${isActive
-                  ? 'bg-gradient-to-l from-yellow-600/10 to-amber-500/10 text-amber-600 border-r-2 border-amber-500 pr-3 pl-4'
-                  : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/50'
-                  }`}
-              >
-                <Icon className={`h-5 w-5 ${isActive ? 'text-amber-600' : 'text-zinc-400'}`} />
-                <span>{item.name}</span>
-              </Link>
-            )
-          })}
+        <nav className="flex-1 p-4 space-y-3 overflow-y-auto">
+          {/* Dashboard (Root Link) */}
+          <Link
+            href="/dashboard"
+            className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 ${pathname === '/dashboard'
+              ? 'bg-gradient-to-l from-yellow-600/10 to-amber-500/10 text-amber-505 text-amber-500 border-r-2 border-amber-500 pr-3 pl-4'
+              : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/50'
+              }`}
+          >
+            <LayoutDashboard className={`h-4.5 w-4.5 ${pathname === '/dashboard' ? 'text-amber-500' : 'text-zinc-400'}`} />
+            <span>לוח בקרה קייטרינג</span>
+          </Link>
+
+          {/* Accordion sections */}
+          {renderAccordionSection('catering', 'קייטרינג כללי', cateringItems, openAccordions.catering, () => toggleAccordion('catering'))}
+          {renderAccordionSection('shabbat', 'ניהול שבת', shabbatItems, openAccordions.shabbat, () => toggleAccordion('shabbat'))}
+          {renderAccordionSection('procurement', 'רכש וקניות', procurementItems, openAccordions.procurement, () => toggleAccordion('procurement'))}
+          {renderAccordionSection('management', 'ניהול ואנליטיקות', managementItems, openAccordions.management, () => toggleAccordion('management'))}
+
+          {/* Go to storefront */}
+          <Link
+            href="/"
+            className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/50 transition-all duration-200 mt-2"
+          >
+            <Globe className="h-4.5 w-4.5 text-zinc-400" />
+            <span>מעבר לאתר החנות</span>
+          </Link>
         </nav>
 
         {showInstallBtn && (
@@ -210,27 +314,38 @@ export default function DashboardLayout({
 
       {/* Mobile Drawer Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 bg-zinc-950/95 backdrop-blur-md z-30 pt-16 flex flex-col">
-          <nav className="flex-1 p-6 space-y-3">
-            {navItems.map((item) => {
-              const Icon = item.icon
-              const isActive = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href)
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`flex items-center gap-4 px-4 py-4 rounded-xl text-base font-bold transition-all ${isActive
-                    ? 'bg-gradient-to-l from-yellow-600/10 to-amber-500/10 text-amber-600 border-r-4 border-amber-500 pr-3 pl-4'
-                    : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/50'
-                    }`}
-                >
-                  <Icon className="h-6 w-6" />
-                  <span>{item.name}</span>
-                </Link>
-              )
-            })}
+        <div className="md:hidden fixed inset-0 bg-zinc-950/95 backdrop-blur-md z-30 pt-16 flex flex-col overflow-y-auto">
+          <nav className="flex-1 p-6 space-y-4">
+            {/* Dashboard (Root Link) */}
+            <Link
+              href="/dashboard"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${pathname === '/dashboard'
+                ? 'bg-gradient-to-l from-yellow-600/10 to-amber-500/10 text-amber-500 border-r-4 border-amber-500 pr-3 pl-4'
+                : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/50'
+                }`}
+            >
+              <LayoutDashboard className="h-5 w-5" />
+              <span>לוח בקרה קייטרינג</span>
+            </Link>
+
+            {/* Accordion sections */}
+            {renderAccordionSection('catering', 'קייטרינג כללי', cateringItems, openAccordions.catering, () => toggleAccordion('catering'), true)}
+            {renderAccordionSection('shabbat', 'ניהול שבת', shabbatItems, openAccordions.shabbat, () => toggleAccordion('shabbat'), true)}
+            {renderAccordionSection('procurement', 'רכש וקניות', procurementItems, openAccordions.procurement, () => toggleAccordion('procurement'), true)}
+            {renderAccordionSection('management', 'ניהול ואנליטיקות', managementItems, openAccordions.management, () => toggleAccordion('management'), true)}
+
+            {/* Go to storefront */}
+            <Link
+              href="/"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900/50 transition-all mt-2"
+            >
+              <Globe className="h-5 w-5 text-zinc-400" />
+              <span>מעבר לאתר החנות</span>
+            </Link>
           </nav>
+
           {showInstallBtn && (
             <div className="p-6 pb-2 border-t border-zinc-900 bg-zinc-950/20">
               <button

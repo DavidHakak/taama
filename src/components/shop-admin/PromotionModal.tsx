@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { Percent, X, Loader2 } from 'lucide-react'
 import { CustomSelect } from '@/components/ui/CustomSelect'
 import { createShopPromotion, updateShopPromotion } from '@/app/(dashboard)/shop-admin/actions'
+import { useRouter } from 'next/navigation'
 import { Promotion, CATEGORIES } from './types'
 
 interface PromotionModalProps {
@@ -12,6 +13,7 @@ interface PromotionModalProps {
   mode: 'create' | 'edit'
   promotion: Promotion | null
   dynamicSizeTypes: string[]
+  setGlobalLoading: (loading: boolean) => void
 }
 
 export default function PromotionModal({
@@ -20,9 +22,11 @@ export default function PromotionModal({
   mode,
   promotion,
   dynamicSizeTypes,
+  setGlobalLoading,
 }: PromotionModalProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
 
   const [promoName, setPromoName] = useState('')
   const [promoCategory, setPromoCategory] = useState('סלטים')
@@ -59,6 +63,7 @@ export default function PromotionModal({
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setGlobalLoading(true)
 
     const qty = parseInt(promoQty)
     const price = parseFloat(promoPrice)
@@ -66,37 +71,49 @@ export default function PromotionModal({
     if (!promoName.trim() || isNaN(qty) || qty <= 0 || isNaN(price) || price <= 0) {
       setError('אנא הזן כמויות ומחירים תקינים וחיוביים')
       setLoading(false)
+      setGlobalLoading(false)
       return
     }
 
-    let res
-    if (mode === 'create') {
-      res = await createShopPromotion({
-        name: promoName.trim(),
-        category: promoCategory,
-        packageQty: qty,
-        packagePrice: price,
-        isActive: promoActive,
-        sizeType: promoSizeType === 'כל המידות' ? null : promoSizeType,
-      })
-    } else {
-      if (!promotion) return
-      res = await updateShopPromotion(promotion.id, {
-        name: promoName.trim(),
-        category: promoCategory,
-        packageQty: qty,
-        packagePrice: price,
-        isActive: promoActive,
-        sizeType: promoSizeType === 'כל המידות' ? null : promoSizeType,
-      })
-    }
+    try {
+      let res
+      if (mode === 'create') {
+        res = await createShopPromotion({
+          name: promoName.trim(),
+          category: promoCategory,
+          packageQty: qty,
+          packagePrice: price,
+          isActive: promoActive,
+          sizeType: promoSizeType === 'כל המידות' ? null : promoSizeType,
+        })
+      } else {
+        if (!promotion) {
+          setLoading(false)
+          setGlobalLoading(false)
+          return
+        }
+        res = await updateShopPromotion(promotion.id, {
+          name: promoName.trim(),
+          category: promoCategory,
+          packageQty: qty,
+          packagePrice: price,
+          isActive: promoActive,
+          sizeType: promoSizeType === 'כל המידות' ? null : promoSizeType,
+        })
+      }
 
-    if (res.success) {
-      onClose()
-    } else {
-      setError(res.error)
+      if (res.success) {
+        onClose()
+        router.refresh()
+      } else {
+        setError(res.error)
+      }
+    } catch (err: any) {
+      setError(err.message || 'שגיאה בעיבוד הבקשה')
+    } finally {
+      setLoading(false)
+      setGlobalLoading(false)
     }
-    setLoading(false)
   }
 
   return (

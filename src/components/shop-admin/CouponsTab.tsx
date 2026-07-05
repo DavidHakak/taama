@@ -3,18 +3,23 @@
 import React, { useState } from 'react'
 import { Plus, Edit2, Trash2 } from 'lucide-react'
 import { toggleCouponStatus, deleteShopCoupon } from '@/app/(dashboard)/shop-admin/actions'
+import { useRouter } from 'next/navigation'
 import { Coupon } from './types'
 import CouponModal from './CouponModal'
+import { useAdminPage } from './AdminPageClient'
 
 interface CouponsTabProps {
   coupons: Coupon[]
-  setGlobalLoading: (loading: boolean) => void
+  setGlobalLoading?: (loading: boolean) => void
 }
 
 export default function CouponsTab({
   coupons,
-  setGlobalLoading,
+  setGlobalLoading: propSetGlobalLoading,
 }: CouponsTabProps) {
+  const { setGlobalLoading: contextSetGlobalLoading } = useAdminPage()
+  const setGlobalLoading = propSetGlobalLoading || contextSetGlobalLoading
+  const router = useRouter()
   // Modal State
   const [isCouponModalOpen, setIsCouponModalOpen] = useState(false)
   const [couponModalMode, setCouponModalMode] = useState<'create' | 'edit'>('create')
@@ -86,8 +91,16 @@ export default function CouponsTab({
                   <button
                     onClick={async () => {
                       setGlobalLoading(true)
-                      await toggleCouponStatus(c.id, !c.is_active)
-                      setGlobalLoading(false)
+                      try {
+                        const res = await toggleCouponStatus(c.id, !c.is_active)
+                        if (res && res.success) {
+                          router.refresh()
+                        }
+                      } catch (err) {
+                        console.error(err)
+                      } finally {
+                        setGlobalLoading(false)
+                      }
                     }}
                     className={`inline-flex px-3 py-1.5 border rounded-lg text-xs font-bold transition-all cursor-pointer ${c.is_active
                       ? 'bg-rose-500/5 hover:bg-rose-500/10 border-rose-500/10 text-rose-400'
@@ -107,12 +120,20 @@ export default function CouponsTab({
                     onClick={async () => {
                       if (confirm(`האם למחוק סופית את הקופון "${c.code}"?`)) {
                         setGlobalLoading(true)
-                        const res = await deleteShopCoupon(c.id)
-                        setGlobalLoading(false)
-                        if (res.success && res.message) {
-                          alert(res.message)
-                        } else if (!res.success) {
-                          alert(res.error || 'שגיאה במחיקת הקופון')
+                        try {
+                          const res = await deleteShopCoupon(c.id)
+                          if (res.success) {
+                            if (res.message) {
+                              alert(res.message)
+                            }
+                            router.refresh()
+                          } else {
+                            alert(res.error || 'שגיאה במחיקת הקופון')
+                          }
+                        } catch (err: any) {
+                          alert(err.message || 'שגיאה במחיקת הקופון')
+                        } finally {
+                          setGlobalLoading(false)
                         }
                       }
                     }}
@@ -133,6 +154,7 @@ export default function CouponsTab({
         onClose={() => setIsCouponModalOpen(false)}
         mode={couponModalMode}
         coupon={selectedCoupon}
+        setGlobalLoading={setGlobalLoading}
       />
     </div>
   )

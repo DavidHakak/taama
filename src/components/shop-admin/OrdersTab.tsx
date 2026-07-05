@@ -3,8 +3,10 @@
 import React, { useState } from 'react'
 import { Calendar, Edit2, Trash2 } from 'lucide-react'
 import { updateOrderStatus, deleteShopOrder } from '@/app/(dashboard)/shop-admin/actions'
+import { useRouter } from 'next/navigation'
 import { Order, Event, Product, Promotion, Coupon } from './types'
 import EditOrderModal from './EditOrderModal'
+import { useAdminPage } from './AdminPageClient'
 
 interface OrdersTabProps {
   orders: Order[]
@@ -13,7 +15,7 @@ interface OrdersTabProps {
   promotions: Promotion[]
   coupons: Coupon[]
   dynamicSizeTypes: string[]
-  setGlobalLoading: (loading: boolean) => void
+  setGlobalLoading?: (loading: boolean) => void
 }
 
 export default function OrdersTab({
@@ -23,30 +25,25 @@ export default function OrdersTab({
   promotions,
   coupons,
   dynamicSizeTypes,
-  setGlobalLoading,
+  setGlobalLoading: propSetGlobalLoading,
 }: OrdersTabProps) {
+  const { setGlobalLoading: contextSetGlobalLoading } = useAdminPage()
+  const setGlobalLoading = propSetGlobalLoading || contextSetGlobalLoading
+  const router = useRouter()
   const [orderSearchQuery, setOrderSearchQuery] = useState('')
 
-  // Accordion state for events under orders tab
-  const [expandedEvents, setExpandedEvents] = useState<{ [key: string]: boolean }>(() => {
-    const initial: { [key: string]: boolean } = {}
-    events.forEach((e) => {
-      if (e.is_active) {
-        initial[e.id] = true
-      }
-    })
-    return initial
-  })
+  // Accordion state for events under orders tab (closed by default)
+  const [expandedEvents, setExpandedEvents] = useState<{ [key: string]: boolean }>({})
 
   // Modal State
   const [isEditOrderModalOpen, setIsEditOrderModalOpen] = useState(false)
   const [editingOrder, setEditingOrder] = useState<Order | null>(null)
 
   const toggleEventExpand = (eventId: string) => {
-    setExpandedEvents((prev) => ({
-      ...prev,
-      [eventId]: !prev[eventId],
-    }))
+    setExpandedEvents((prev) => {
+      const isCurrentlyOpen = !!prev[eventId]
+      return isCurrentlyOpen ? {} : { [eventId]: true }
+    })
   }
 
   // Group orders by eventId
@@ -54,12 +51,12 @@ export default function OrdersTab({
     const eventOrders = orders.filter((o) => {
       if (o.eventId !== event.id) return false
       if (!orderSearchQuery.trim()) return true
-      
+
       const query = orderSearchQuery.toLowerCase()
       const clientNameMatch = o.userFullName?.toLowerCase().includes(query) || false
       const emailMatch = o.userEmail?.toLowerCase().includes(query) || false
       const idMatch = o.id.toLowerCase().includes(query)
-      
+
       return clientNameMatch || emailMatch || idMatch
     })
     const totalRevenue = eventOrders.reduce((sum, o) => sum + o.totalPrice, 0)
@@ -80,7 +77,7 @@ export default function OrdersTab({
     <div className="space-y-6 text-right" dir="rtl">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h2 className="text-lg font-bold text-white">הזמנות B2C שהתקבלו בחנות</h2>
-        
+
         {/* Search Bar */}
         <div className="w-full sm:w-80">
           <input
@@ -122,7 +119,7 @@ export default function OrdersTab({
                   <strong className="text-zinc-200 font-mono">{totalOrders}</strong>
                 </div>
                 <div>
-                  <span>פדיון: </span>
+                  <span>לתשלום: </span>
                   <strong className="text-amber-500 font-mono">₪{totalRevenue.toFixed(2)}</strong>
                 </div>
                 <div>
@@ -155,77 +152,121 @@ export default function OrdersTab({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-900 text-zinc-300 text-sm">
-                      {eventOrders.map((o) => (
-                        <tr key={o.id} className="hover:bg-zinc-900/10 transition-colors">
-                          <td className="py-4 px-6 font-mono text-xs font-bold text-zinc-400">
-                            <span className="text-amber-500/80">#</span>
-                            <span title={o.id}>{o.id.substring(0, 8)}</span>
-                          </td>
-                          <td className="py-4 px-6">
-                            <div className="font-bold text-zinc-100">{o.userFullName || 'לקוח B2C'}</div>
-                            <div className="text-xxs text-zinc-550 mt-0.5">{o.userEmail} • {o.userPhone || '-'}</div>
-                          </td>
-                          <td className="py-4 px-6 font-mono">
-                            {new Date(o.createdAt).toLocaleDateString('he-IL')}
-                          </td>
-                          <td className="py-4 px-6 font-bold text-amber-500 font-mono">
-                            ₪{o.totalPrice.toFixed(2)}
-                            {o.couponCode && (
-                              <span className="block text-[10px] text-emerald-400 font-sans font-normal mt-0.5">
-                                (הנחת קופון {o.couponCode}: -₪{o.couponDiscount.toFixed(2)})
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-4 px-6">
-                            <select
-                              value={o.status}
-                              onChange={async (e) => {
-                                setGlobalLoading(true)
-                                await updateOrderStatus(o.id, e.target.value)
-                                setGlobalLoading(false)
-                              }}
-                              className={`px-3 py-1.5 bg-black border rounded-xl text-xs font-bold transition-all outline-none ${o.status === 'Completed'
-                                ? 'border-emerald-500/30 text-emerald-400'
-                                : o.status === 'Ready'
-                                  ? 'border-blue-500/30 text-blue-400'
-                                  : o.status === 'Processing'
-                                    ? 'border-amber-500/30 text-amber-500'
-                                    : 'border-zinc-800 text-zinc-400'
-                                }`}
-                            >
-                              <option value="New">התקבלה (חדשה)</option>
-                              <option value="Processing">בהכנה</option>
-                              <option value="Ready">מוכן לאיסוף</option>
-                              <option value="Completed">הושלם</option>
-                            </select>
-                          </td>
-                          <td className="py-4 px-6 text-left space-x-2 space-x-reverse">
-                            <button
-                              onClick={() => openEditOrderModal(o)}
-                              className="inline-flex p-2 bg-zinc-900 hover:bg-amber-500/10 text-zinc-400 hover:text-amber-500 rounded-lg transition-all cursor-pointer"
-                              title="ערוך פריטי הזמנה ומחירים"
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={async () => {
-                                if (confirm(`האם אתה בטוח שברצונך למחוק לחלוטין את ההזמנה של ${o.userFullName || 'לקוח B2C'} בסך ₪${o.totalPrice.toFixed(2)}?`)) {
+                      {eventOrders.map((o) => {
+                        const subtotal = o.items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+                        const couponDiscount = o.couponDiscount || 0
+                        const bundleDiscount = Math.max(0, Math.round((subtotal - couponDiscount - o.totalPrice) * 105) / 105)
+                        const hasDiscount = bundleDiscount > 0 || couponDiscount > 0
+
+                        return (
+                          <tr key={o.id} className="hover:bg-zinc-900/10 transition-colors">
+                            <td className="py-4 px-6 font-mono text-xs font-bold text-zinc-400">
+                              <span className="text-amber-500/80">#</span>
+                              <span title={o.id}>{o.id.substring(0, 8)}</span>
+                            </td>
+                            <td className="py-4 px-6">
+                              <div className="font-bold text-zinc-100">{o.userFullName || 'לקוח B2C'}</div>
+                              <div className="text-xxs text-zinc-550 mt-0.5">{o.userEmail} • {o.userPhone || '-'}</div>
+                            </td>
+                            <td className="py-4 px-6 font-mono">
+                              {new Date(o.createdAt).toLocaleDateString('he-IL')}
+                            </td>
+                            <td className="py-4 px-6 font-mono text-xs">
+                              {hasDiscount ? (
+                                <div className="space-y-1 text-right min-w-[140px]">
+                                  <div className="text-zinc-450 text-xxs flex justify-between gap-2">
+                                    <span>סכום מקורי:</span>
+                                    <span>₪{subtotal.toFixed(2)}</span>
+                                  </div>
+                                  {bundleDiscount > 0 && (
+                                    <div className="text-emerald-400 text-xxs flex justify-between gap-2">
+                                      <span>הנחת מבצעים:</span>
+                                      <span>-₪{bundleDiscount.toFixed(2)}</span>
+                                    </div>
+                                  )}
+                                  {couponDiscount > 0 && (
+                                    <div className="text-emerald-400 text-xxs flex justify-between gap-2">
+                                      <span>קופון ({o.couponCode}):</span>
+                                      <span>-₪{couponDiscount.toFixed(2)}</span>
+                                    </div>
+                                  )}
+                                  <div className="border-t border-zinc-900 pt-1 text-amber-500 font-bold flex justify-between gap-2 text-xs">
+                                    <span>סה"כ:</span>
+                                    <span>₪{o.totalPrice.toFixed(2)}</span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="font-bold text-amber-500 text-xs">
+                                  ₪{o.totalPrice.toFixed(2)}
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-4 px-6">
+                              <select
+                                value={o.status}
+                                onChange={async (e) => {
                                   setGlobalLoading(true)
-                                  const res = await deleteShopOrder(o.id)
-                                  setGlobalLoading(false)
-                                  if (!res.success) {
-                                    alert(res.error || 'שגיאה במחיקת ההזמנה')
+                                  try {
+                                    const res = await updateOrderStatus(o.id, e.target.value)
+                                    if (res && res.success) {
+                                      router.refresh()
+                                    }
+                                  } catch (err) {
+                                    console.error(err)
+                                  } finally {
+                                    setGlobalLoading(false)
                                   }
-                                }
-                              }}
-                              className="inline-flex p-2 bg-zinc-900 hover:bg-red-500/10 text-zinc-400 hover:text-red-455 rounded-lg transition-all cursor-pointer"
-                              title="מחק הזמנה שלמה"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                                }}
+                                className={`px-3 py-1.5 bg-black border rounded-xl text-xs font-bold transition-all outline-none ${o.status === 'Completed'
+                                  ? 'border-emerald-500/30 text-emerald-400'
+                                  : o.status === 'Ready'
+                                    ? 'border-blue-500/30 text-blue-400'
+                                    : o.status === 'Processing'
+                                      ? 'border-amber-500/30 text-amber-500'
+                                      : 'border-zinc-800 text-zinc-400'
+                                  }`}
+                              >
+                                <option value="New">התקבלה (חדשה)</option>
+                                <option value="Processing">בהכנה</option>
+                                <option value="Ready">מוכן לאיסוף</option>
+                                <option value="Completed">הושלם</option>
+                              </select>
+                            </td>
+                            <td className="py-4 px-6 text-left space-x-2 space-x-reverse">
+                              <button
+                                onClick={() => openEditOrderModal(o)}
+                                className="inline-flex p-2 bg-zinc-900 hover:bg-amber-500/10 text-zinc-400 hover:text-amber-500 rounded-lg transition-all cursor-pointer"
+                                title="ערוך פריטי הזמנה ומחירים"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (confirm(`האם אתה בטוח שברצונך למחוק לחלוטין את ההזמנה של ${o.userFullName || 'לקוח B2C'} בסך ₪${o.totalPrice.toFixed(2)}?`)) {
+                                    setGlobalLoading(true)
+                                    try {
+                                      const res = await deleteShopOrder(o.id)
+                                      if (res && res.success) {
+                                        router.refresh()
+                                      } else {
+                                        alert(res.error || 'שגיאה במחיקת ההזמנה')
+                                      }
+                                    } catch (err: any) {
+                                      alert(err.message || 'שגיאה במחיקת ההזמנה')
+                                    } finally {
+                                      setGlobalLoading(false)
+                                    }
+                                  }
+                                }}
+                                className="inline-flex p-2 bg-zinc-900 hover:bg-red-500/10 text-zinc-400 hover:text-red-455 rounded-lg transition-all cursor-pointer"
+                                title="מחק הזמנה שלמה"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 )}
@@ -246,6 +287,7 @@ export default function OrdersTab({
         promotions={promotions}
         coupons={coupons}
         dynamicSizeTypes={dynamicSizeTypes}
+        setGlobalLoading={setGlobalLoading}
       />
     </div>
   )

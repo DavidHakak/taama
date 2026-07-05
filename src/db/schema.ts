@@ -40,6 +40,7 @@ export const orders = pgTable('orders', {
   quote_global_discount: numeric('quote_global_discount', { precision: 10, scale: 2 }).default('0.00'),
   quote_delivery_type: text('quote_delivery_type').default('self'),
   quote_delivery_price: numeric('quote_delivery_price', { precision: 10, scale: 2 }).default('0.00'),
+  actual_cost: numeric('actual_cost', { precision: 10, scale: 2 }),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   user_id: uuid('user_id'),
 })

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { Gift, X, Loader2 } from 'lucide-react'
 import { CustomSelect } from '@/components/ui/CustomSelect'
 import { createShopCoupon, updateShopCoupon } from '@/app/(dashboard)/shop-admin/actions'
+import { useRouter } from 'next/navigation'
 import { Coupon } from './types'
 
 interface CouponModalProps {
@@ -11,6 +12,7 @@ interface CouponModalProps {
   onClose: () => void
   mode: 'create' | 'edit'
   coupon: Coupon | null
+  setGlobalLoading: (loading: boolean) => void
 }
 
 export default function CouponModal({
@@ -18,9 +20,11 @@ export default function CouponModal({
   onClose,
   mode,
   coupon,
+  setGlobalLoading,
 }: CouponModalProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
 
   const [cpCode, setCpCode] = useState('')
   const [cpDiscountType, setCpDiscountType] = useState('percentage')
@@ -60,6 +64,7 @@ export default function CouponModal({
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setGlobalLoading(true)
 
     const val = parseFloat(cpDiscountValue)
     const minVal = parseFloat(cpMinOrderValue || '0')
@@ -68,39 +73,51 @@ export default function CouponModal({
     if (!cpCode.trim() || isNaN(val) || val <= 0) {
       setError('אנא הזן קוד קופון וערך הנחה תקין וחיובי')
       setLoading(false)
+      setGlobalLoading(false)
       return
     }
 
-    let res
-    if (mode === 'create') {
-      res = await createShopCoupon({
-        code: cpCode.trim().toUpperCase(),
-        discountType: cpDiscountType,
-        discountValue: val,
-        minOrderValue: minVal,
-        maxUses: maxUseVal,
-        expirationDate: cpExpirationDate || null,
-        isActive: cpActive,
-      })
-    } else {
-      if (!coupon) return
-      res = await updateShopCoupon(coupon.id, {
-        code: cpCode.trim().toUpperCase(),
-        discountType: cpDiscountType,
-        discountValue: val,
-        minOrderValue: minVal,
-        maxUses: maxUseVal,
-        expirationDate: cpExpirationDate || null,
-        isActive: cpActive,
-      })
-    }
+    try {
+      let res
+      if (mode === 'create') {
+        res = await createShopCoupon({
+          code: cpCode.trim().toUpperCase(),
+          discountType: cpDiscountType,
+          discountValue: val,
+          minOrderValue: minVal,
+          maxUses: maxUseVal,
+          expirationDate: cpExpirationDate || null,
+          isActive: cpActive,
+        })
+      } else {
+        if (!coupon) {
+          setLoading(false)
+          setGlobalLoading(false)
+          return
+        }
+        res = await updateShopCoupon(coupon.id, {
+          code: cpCode.trim().toUpperCase(),
+          discountType: cpDiscountType,
+          discountValue: val,
+          minOrderValue: minVal,
+          maxUses: maxUseVal,
+          expirationDate: cpExpirationDate || null,
+          isActive: cpActive,
+        })
+      }
 
-    if (res.success) {
-      onClose()
-    } else {
-      setError(res.error)
+      if (res.success) {
+        onClose()
+        router.refresh()
+      } else {
+        setError(res.error)
+      }
+    } catch (err: any) {
+      setError(err.message || 'שגיאה בעיבוד הבקשה')
+    } finally {
+      setLoading(false)
+      setGlobalLoading(false)
     }
-    setLoading(false)
   }
 
   return (

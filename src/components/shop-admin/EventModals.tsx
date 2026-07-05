@@ -3,16 +3,19 @@
 import React, { useState, useEffect } from 'react'
 import { Calendar, Copy, X, Loader2 } from 'lucide-react'
 import { createShopEvent, duplicateShopEvent } from '@/app/(dashboard)/shop-admin/actions'
+import { useRouter } from 'next/navigation'
 import { Event } from './types'
 
 interface EventModalProps {
   isOpen: boolean
   onClose: () => void
+  setGlobalLoading: (loading: boolean) => void
 }
 
-export function EventModal({ isOpen, onClose }: EventModalProps) {
+export function EventModal({ isOpen, onClose, setGlobalLoading }: EventModalProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
 
   const [eventNameInput, setEventNameInput] = useState('')
   const [eventDateInput, setEventDateInput] = useState('')
@@ -34,10 +37,12 @@ export function EventModal({ isOpen, onClose }: EventModalProps) {
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setGlobalLoading(true)
 
     if (!eventNameInput.trim() || !eventDateInput) {
       setError('אנא מלא את כל השדות')
       setLoading(false)
+      setGlobalLoading(false)
       return
     }
 
@@ -45,22 +50,30 @@ export function EventModal({ isOpen, onClose }: EventModalProps) {
     if (eventDateInput < todayStr) {
       setError('לא ניתן לפתוח אירוע על תאריך שעבר')
       setLoading(false)
+      setGlobalLoading(false)
       return
     }
 
-    const res = await createShopEvent({
-      name: eventNameInput.trim(),
-      pickupDate: eventDateInput,
-      isActive: eventActiveInput,
-      isSpecial: eventSpecialInput,
-    })
+    try {
+      const res = await createShopEvent({
+        name: eventNameInput.trim(),
+        pickupDate: eventDateInput,
+        isActive: eventActiveInput,
+        isSpecial: eventSpecialInput,
+      })
 
-    if (res.success) {
-      onClose()
-    } else {
-      setError(res.error)
+      if (res.success) {
+        onClose()
+        router.refresh()
+      } else {
+        setError(res.error)
+      }
+    } catch (err: any) {
+      setError(err.message || 'שגיאה ביצירת האירוע')
+    } finally {
+      setLoading(false)
+      setGlobalLoading(false)
     }
-    setLoading(false)
   }
 
   return (
@@ -166,11 +179,13 @@ interface DuplicateEventModalProps {
   isOpen: boolean
   onClose: () => void
   sourceEvent: Event | null
+  setGlobalLoading: (loading: boolean) => void
 }
 
-export function DuplicateEventModal({ isOpen, onClose, sourceEvent }: DuplicateEventModalProps) {
+export function DuplicateEventModal({ isOpen, onClose, sourceEvent, setGlobalLoading }: DuplicateEventModalProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
 
   const [dupName, setDupName] = useState('')
   const [dupDate, setDupDate] = useState('')
@@ -192,22 +207,31 @@ export function DuplicateEventModal({ isOpen, onClose, sourceEvent }: DuplicateE
     e.preventDefault()
     setLoading(true)
     setError(null)
+    setGlobalLoading(true)
 
     const todayStr = new Date().toLocaleDateString('en-CA')
     if (dupDate < todayStr) {
       setError('לא ניתן לשכפל אירוע לתאריך שעבר')
       setLoading(false)
+      setGlobalLoading(false)
       return
     }
 
-    const res = await duplicateShopEvent(sourceEvent.id, dupName.trim(), dupDate, dupSpecial)
+    try {
+      const res = await duplicateShopEvent(sourceEvent.id, dupName.trim(), dupDate, dupSpecial)
 
-    if (res.success) {
-      onClose()
-    } else {
-      setError(res.error)
+      if (res.success) {
+        onClose()
+        router.refresh()
+      } else {
+        setError(res.error)
+      }
+    } catch (err: any) {
+      setError(err.message || 'שגיאה בשכפול האירוע')
+    } finally {
+      setLoading(false)
+      setGlobalLoading(false)
     }
-    setLoading(false)
   }
 
   return (

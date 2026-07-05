@@ -3,9 +3,10 @@
 import React, { useState, useEffect } from 'react'
 import { ShoppingBag, X, Minus, Plus, Trash2, Loader2 } from 'lucide-react'
 import { CustomSelect } from '@/components/ui/CustomSelect'
-import { useCustomDialogs } from '@/hooks/useCustomDialogs'
 import { editShopOrder } from '@/app/(dashboard)/shop-admin/actions'
+import { useRouter } from 'next/navigation'
 import { Order, Product, Promotion, Coupon } from './types'
+import { useAdminPage } from './AdminPageClient'
 
 interface EditOrderModalProps {
   isOpen: boolean
@@ -15,6 +16,7 @@ interface EditOrderModalProps {
   promotions: Promotion[]
   coupons: Coupon[]
   dynamicSizeTypes: string[]
+  setGlobalLoading: (loading: boolean) => void
 }
 
 interface EditOrderItem {
@@ -34,9 +36,11 @@ export default function EditOrderModal({
   promotions,
   coupons,
   dynamicSizeTypes,
+  setGlobalLoading,
 }: EditOrderModalProps) {
-  const { showAlert } = useCustomDialogs()
+  const { showAlert } = useAdminPage()
   const [loading, setLoading] = useState(false)
+  const router = useRouter()
 
   // State inside modal
   const [editOrderItems, setEditOrderItems] = useState<EditOrderItem[]>([])
@@ -49,6 +53,7 @@ export default function EditOrderModal({
   const [addQty, setAddQty] = useState('1')
   const [addPriceOverride, setAddPriceOverride] = useState('')
   const [addSizeType, setAddSizeType] = useState('')
+  const [showAddProductForm, setShowAddProductForm] = useState(false)
 
   useEffect(() => {
     if (!isOpen || !editingOrder) return
@@ -57,6 +62,7 @@ export default function EditOrderModal({
     setEditCoupon(coupons.find((c) => c.code === editingOrder.couponCode) || null)
     setCouponCodeInputEdit('')
     setCouponErrorEdit(null)
+    setShowAddProductForm(false)
 
     const initialProduct = products[0]
     if (initialProduct) {
@@ -174,7 +180,9 @@ export default function EditOrderModal({
   // Real-time Bundle discounts calculations
   let editBundleDiscount = 0
   promotions.forEach((promo) => {
-    const categoryItems = editOrderItems.filter((item) => item.category === promo.category)
+    const categoryItems = editOrderItems.filter(
+      (item) => item.category === promo.category && (!promo.size_type || item.sizeType === promo.size_type)
+    )
     const categoryQty = categoryItems.reduce((sum, item) => sum + item.quantity, 0)
 
     if (categoryQty >= promo.package_qty) {
@@ -222,23 +230,31 @@ export default function EditOrderModal({
     }
 
     setLoading(true)
-    const res = await editShopOrder(
-      editingOrder.id,
-      editOrderItems.map((item) => ({
-        productId: item.productId,
-        quantity: item.quantity,
-        price: item.price,
-        sizeType: item.sizeType,
-      })),
-      editCoupon?.code || null
-    )
+    setGlobalLoading(true)
+    try {
+      const res = await editShopOrder(
+        editingOrder.id,
+        editOrderItems.map((item) => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          price: item.price,
+          sizeType: item.sizeType,
+        })),
+        editCoupon?.code || null
+      )
 
-    if (res.success) {
-      onClose()
-    } else {
-      showAlert(res.error || 'שגיאה בעדכון ההזמנה', 'שגיאה', 'error')
+      if (res.success) {
+        onClose()
+        router.refresh()
+      } else {
+        showAlert(res.error || 'שגיאה בעדכון ההזמנה', 'שגיאה', 'error')
+      }
+    } catch (err: any) {
+      showAlert(err.message || 'שגיאה בעדכון ההזמנה', 'שגיאה', 'error')
+    } finally {
+      setLoading(false)
+      setGlobalLoading(false)
     }
-    setLoading(false)
   }
 
   return (
@@ -328,84 +344,106 @@ export default function EditOrderModal({
           </div>
 
           {/* Add New Item Panel */}
-          <div className="border border-zinc-900 rounded-xl p-4 bg-zinc-950/40 space-y-3">
-            <h4 className="text-[11px] font-bold text-zinc-400">הוספת מוצר חדש להזמנה</h4>
-            <div className="flex flex-col sm:flex-row items-end gap-3">
-              <div className="w-full">
-                <label className="block text-[10px] font-bold text-zinc-550 mb-1 text-zinc-500">בחר מוצר מהקטלוג</label>
-                <CustomSelect
-                  options={products.map((p) => ({
-                    value: p.id,
-                    label: `${p.name} (${p.category})`,
-                    category: p.category,
-                  }))}
-                  value={addProdId}
-                  onChange={(val) => {
-                    setAddProdId(val)
-                    const p = products.find((prod) => prod.id === val)
-                    if (p && p.variants && p.variants.length > 0) {
-                      setAddPriceOverride(p.variants[0].price.toString())
-                      setAddSizeType(p.variants[0].sizeType)
-                    }
-                  }}
-                  placeholder="בחר מוצר..."
-                />
-              </div>
-              {(() => {
-                const selectedProd = products.find(prod => prod.id === addProdId)
-                return (
-                  <>
-                    {selectedProd && selectedProd.variants.length > 0 && (
-                      <div className="w-28 shrink-0">
-                        <label className="block text-[10px] font-bold text-zinc-500 mb-1">בחר מידה</label>
-                        <CustomSelect
-                          options={selectedProd.variants.map((v) => ({
-                            value: v.sizeType,
-                            label: `${v.sizeType} (₪${v.price})`,
-                          }))}
-                          value={addSizeType}
-                          onChange={(size) => {
-                            setAddSizeType(size)
-                            const v = selectedProd.variants.find(vari => vari.sizeType === size)
-                            if (v) setAddPriceOverride(v.price.toString())
-                          }}
-                          isSearchable={false}
-                          placeholder="בחר מידה..."
-                        />
-                      </div>
-                    )}
-                  </>
-                )
-              })()}
-              <div className="w-20 shrink-0">
-                <label className="block text-[10px] font-bold text-zinc-500 mb-1">כמות</label>
-                <input
-                  type="number"
-                  value={addQty}
-                  onChange={(e) => setAddQty(e.target.value)}
-                  className="w-full px-3 py-2 bg-black border border-zinc-900 rounded-lg text-white text-[11px] outline-none font-mono font-bold"
-                />
-              </div>
-              <div className="w-24 shrink-0">
-                <label className="block text-[10px] font-bold text-zinc-500 mb-1">מחיר מיוחד (override)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="החלף מחיר"
-                  value={addPriceOverride}
-                  onChange={(e) => setAddPriceOverride(e.target.value)}
-                  className="w-full px-3 py-2 bg-black border border-zinc-900 rounded-lg text-white text-[11px] outline-none font-mono font-bold"
-                />
-              </div>
+          {!showAddProductForm ? (
+            <div className="flex justify-start">
               <button
                 type="button"
-                onClick={handleAddItemToEditOrder}
-                className="w-full sm:w-auto px-4 py-2 bg-zinc-900 hover:bg-zinc-850 border border-zinc-850 rounded-lg text-xxs font-bold text-amber-500 hover:text-amber-450 cursor-pointer whitespace-nowrap"
+                onClick={() => setShowAddProductForm(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 rounded-xl text-xs font-bold text-amber-500 hover:text-amber-450 transition-all cursor-pointer"
               >
-                הוסף להזמנה +
+                <Plus className="h-4 w-4" />
+                הוסף מוצר חדש להזמנה
               </button>
             </div>
-          </div>
+          ) : (
+            <div className="border border-zinc-900 rounded-xl p-4 bg-zinc-950/40 space-y-3 animate-fade-in">
+              <div className="flex justify-between items-center border-b border-zinc-900/60 pb-2">
+                <h4 className="text-[11px] font-bold text-zinc-400">הוספת מוצר חדש להזמנה</h4>
+                <button
+                  type="button"
+                  onClick={() => setShowAddProductForm(false)}
+                  className="text-xxs font-bold text-zinc-500 hover:text-rose-455 transition-colors"
+                >
+                  ביטול ✕
+                </button>
+              </div>
+              <div className="flex flex-col sm:flex-row items-end gap-3 pt-1">
+                <div className="w-full">
+                  <label className="block text-[10px] font-bold text-zinc-550 mb-1 text-zinc-500">בחר מוצר מהקטלוג</label>
+                  <CustomSelect
+                    options={products.map((p) => ({
+                      value: p.id,
+                      label: `${p.name} (${p.category})`,
+                      category: p.category,
+                    }))}
+                    value={addProdId}
+                    onChange={(val) => {
+                      setAddProdId(val)
+                      const p = products.find((prod) => prod.id === val)
+                      if (p && p.variants && p.variants.length > 0) {
+                        setAddPriceOverride(p.variants[0].price.toString())
+                        setAddSizeType(p.variants[0].sizeType)
+                      }
+                    }}
+                    placeholder="בחר מוצר..."
+                  />
+                </div>
+                {(() => {
+                  const selectedProd = products.find(prod => prod.id === addProdId)
+                  return (
+                    <>
+                      {selectedProd && selectedProd.variants.length > 0 && (
+                        <div className="w-28 shrink-0">
+                          <label className="block text-[10px] font-bold text-zinc-500 mb-1">בחר מידה</label>
+                          <CustomSelect
+                            options={selectedProd.variants.map((v) => ({
+                              value: v.sizeType,
+                              label: `${v.sizeType} (₪${v.price})`,
+                            }))}
+                            value={addSizeType}
+                            onChange={(size) => {
+                              setAddSizeType(size)
+                              const v = selectedProd.variants.find(vari => vari.sizeType === size)
+                              if (v) setAddPriceOverride(v.price.toString())
+                            }}
+                            isSearchable={false}
+                            placeholder="בחר מידה..."
+                          />
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
+                <div className="w-20 shrink-0">
+                  <label className="block text-[10px] font-bold text-zinc-500 mb-1">כמות</label>
+                  <input
+                    type="number"
+                    value={addQty}
+                    onChange={(e) => setAddQty(e.target.value)}
+                    className="w-full px-3 py-2 bg-black border border-zinc-900 rounded-lg text-white text-[11px] outline-none font-mono font-bold"
+                  />
+                </div>
+                <div className="w-24 shrink-0">
+                  <label className="block text-[10px] font-bold text-zinc-500 mb-1">מחיר מיוחד (override)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="החלף מחיר"
+                    value={addPriceOverride}
+                    onChange={(e) => setAddPriceOverride(e.target.value)}
+                    className="w-full px-3 py-2 bg-black border border-zinc-900 rounded-lg text-white text-[11px] outline-none font-mono font-bold"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddItemToEditOrder}
+                  className="w-full sm:w-auto px-4 py-2 bg-zinc-900 hover:bg-zinc-850 border border-zinc-850 rounded-lg text-xxs font-bold text-amber-500 hover:text-amber-450 cursor-pointer whitespace-nowrap"
+                >
+                  הוסף להזמנה +
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Coupon Management Panel */}
           <div className="border border-zinc-900 rounded-xl p-4 bg-zinc-950/40 space-y-3">
@@ -422,7 +460,7 @@ export default function EditOrderModal({
                 <button
                   type="button"
                   onClick={() => setEditCoupon(null)}
-                  className="text-xxs font-bold text-zinc-500 hover:text-rose-400 px-2 py-1 bg-zinc-900 hover:bg-zinc-850 border border-zinc-850 rounded-lg transition-all"
+                  className="text-xxs font-bold text-zinc-500 hover:text-rose-450 px-2 py-1 bg-zinc-900 hover:bg-zinc-850 border border-zinc-850 rounded-lg transition-all"
                 >
                   הסר קופון
                 </button>
@@ -455,8 +493,9 @@ export default function EditOrderModal({
           {/* Recalculated Order Summary Footer */}
           <div className="border-t border-zinc-900 pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1.5 text-xs text-zinc-400 w-full sm:w-auto">
+
               <div className="flex gap-12 justify-between">
-                <span>סכום ביניים פריטים:</span>
+                <span>  מחיר בסיס:</span>
                 <span className="font-mono font-bold text-zinc-200">₪{editSubtotal.toFixed(2)}</span>
               </div>
               {editBundleDiscount > 0 && (
@@ -472,9 +511,17 @@ export default function EditOrderModal({
                 </div>
               )}
               <div className="flex gap-12 justify-between border-t border-zinc-900/60 pt-1.5 text-sm font-bold text-zinc-200">
-                <span>סה"כ הזמנה מחושב מחדש:</span>
+                <span>סה"כ מעודכן לתשלום:</span>
                 <span className="text-amber-500 font-mono text-base">₪{editFinalTotal.toFixed(2)}</span>
               </div>
+              {Math.abs(editFinalTotal - editingOrder.totalPrice) >= 0.01 && (
+                <div className="flex gap-12 justify-between text-[10px] text-zinc-500 font-semibold pt-0.5 border-t border-zinc-900/40">
+                  <span>הפרש מהסכום המקורי:</span>
+                  <span className={`font-mono ${editFinalTotal > editingOrder.totalPrice ? 'text-rose-400' : 'text-emerald-400'}`}>
+                    {editFinalTotal > editingOrder.totalPrice ? '+' : ''}₪{(editFinalTotal - editingOrder.totalPrice).toFixed(2)}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 justify-end">

@@ -3,17 +3,22 @@
 import React from 'react'
 import { Lock, Unlock } from 'lucide-react'
 import { toggleUserBlock } from '@/app/(dashboard)/shop-admin/actions'
+import { useRouter } from 'next/navigation'
 import { Customer } from './types'
+import { useAdminPage } from './AdminPageClient'
 
 interface CustomersTabProps {
   customers: Customer[]
-  setGlobalLoading: (loading: boolean) => void
+  setGlobalLoading?: (loading: boolean) => void
 }
 
 export default function CustomersTab({
   customers,
-  setGlobalLoading,
+  setGlobalLoading: propSetGlobalLoading,
 }: CustomersTabProps) {
+  const { setGlobalLoading: contextSetGlobalLoading } = useAdminPage()
+  const setGlobalLoading = propSetGlobalLoading || contextSetGlobalLoading
+  const router = useRouter()
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-bold text-white">ניהול לקוחות וחסימות</h2>
@@ -46,8 +51,16 @@ export default function CustomersTab({
                   <button
                     onClick={async () => {
                       setGlobalLoading(true)
-                      await toggleUserBlock(c.id, !c.is_blocked)
-                      setGlobalLoading(false)
+                      try {
+                        const res = await toggleUserBlock(c.id, !c.is_blocked)
+                        if (res && res.success) {
+                          router.refresh()
+                        }
+                      } catch (err) {
+                        console.error(err)
+                      } finally {
+                        setGlobalLoading(false)
+                      }
                     }}
                     className={`inline-flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-xs font-bold transition-all cursor-pointer ${c.is_blocked
                       ? 'bg-rose-500/10 hover:bg-rose-500/15 border-rose-500/20 text-rose-400'

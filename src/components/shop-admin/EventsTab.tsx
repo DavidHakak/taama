@@ -2,15 +2,16 @@
 
 import React, { useState, useEffect } from 'react'
 import { Plus, Calendar, Loader2, PlusCircle, Copy, Trash2 } from 'lucide-react'
-import { useCustomDialogs } from '@/hooks/useCustomDialogs'
 import { toggleEventStatus, deleteShopEvent, createShopEvent } from '@/app/(dashboard)/shop-admin/actions'
 import { getHebcalRecommendations } from '@/app/(dashboard)/shopping-list/actions'
+import { useRouter } from 'next/navigation'
 import { Event } from './types'
 import { EventModal, DuplicateEventModal } from './EventModals'
+import { useAdminPage } from './AdminPageClient'
 
 interface EventsTabProps {
   events: Event[]
-  setGlobalLoading: (loading: boolean) => void
+  setGlobalLoading?: (loading: boolean) => void
 }
 
 interface CalendarRec {
@@ -20,9 +21,11 @@ interface CalendarRec {
 
 export default function EventsTab({
   events,
-  setGlobalLoading,
+  setGlobalLoading: propSetGlobalLoading,
 }: EventsTabProps) {
-  const { showAlert, showConfirm } = useCustomDialogs()
+  const { setGlobalLoading: contextSetGlobalLoading, showAlert, showConfirm } = useAdminPage()
+  const setGlobalLoading = propSetGlobalLoading || contextSetGlobalLoading
+  const router = useRouter()
 
   // Modal State
   const [isEventModalOpen, setIsEventModalOpen] = useState(false)
@@ -85,23 +88,34 @@ export default function EventsTab({
                   <button
                     onClick={async () => {
                       setRecMessage(null)
-                      const res = await createShopEvent({
-                        name: rec.name,
-                        pickupDate: rec.date,
-                        isActive: false,
-                        isSpecial: true,
-                      })
-                      if (res.success) {
-                        setRecMessage({
-                          type: 'success',
-                          text: `אירוע "${rec.name}" נוצר בהצלחה! (במצב סגור)`,
+                      setGlobalLoading(true)
+                      try {
+                        const res = await createShopEvent({
+                          name: rec.name,
+                          pickupDate: rec.date,
+                          isActive: false,
+                          isSpecial: true,
                         })
-                        setTimeout(() => setRecMessage(null), 4000)
-                      } else {
+                        if (res.success) {
+                          setRecMessage({
+                            type: 'success',
+                            text: `אירוע "${rec.name}" נוצר בהצלחה! (במצב סגור)`,
+                          })
+                          setTimeout(() => setRecMessage(null), 4000)
+                          router.refresh()
+                        } else {
+                          setRecMessage({
+                            type: 'error',
+                            text: res.error || 'שגיאה במהלך יצירת האירוע.',
+                          })
+                        }
+                      } catch (err: any) {
                         setRecMessage({
                           type: 'error',
-                          text: res.error || 'שגיאה במהלך יצירת האירוע.',
+                          text: err.message || 'שגיאה במהלך יצירת האירוע.',
                         })
+                      } finally {
+                        setGlobalLoading(false)
                       }
                     }}
                     className="w-full flex items-center justify-center gap-1.5 py-1 px-3 bg-amber-500/5 hover:bg-amber-500/10 border border-amber-500/20 rounded-lg text-[10px] font-bold text-amber-500 hover:text-amber-450 hover:border-amber-500/40 transition-all cursor-pointer"
@@ -170,10 +184,17 @@ export default function EventsTab({
                     <button
                       onClick={async () => {
                         setGlobalLoading(true)
-                        const res = await toggleEventStatus(e.id, !e.is_active)
-                        setGlobalLoading(false)
-                        if (res && !res.success) {
-                          showAlert(res.error || 'שגיאה בשינוי סטטוס האירוע', 'שגיאה', 'error')
+                        try {
+                          const res = await toggleEventStatus(e.id, !e.is_active)
+                          if (res && !res.success) {
+                            showAlert(res.error || 'שגיאה בשינוי סטטוס האירוע', 'שגיאה', 'error')
+                          } else {
+                            router.refresh()
+                          }
+                        } catch (err: any) {
+                          showAlert(err.message || 'שגיאה בשינוי סטטוס האירוע', 'שגיאה', 'error')
+                        } finally {
+                          setGlobalLoading(false)
                         }
                       }}
                       className={`inline-flex px-3 py-1.5 border rounded-lg text-xs font-bold transition-all cursor-pointer ${e.is_active
@@ -194,16 +215,22 @@ export default function EventsTab({
                       onClick={() => {
                         showConfirm(`האם למחוק אירוע זה? פעולה זו תמחוק את האירוע רק במידה ואין עליו הזמנות.`, async () => {
                           setGlobalLoading(true)
-                          const res = await deleteShopEvent(e.id)
-                          setGlobalLoading(false)
-                          if (!res.success) {
-                            showAlert(res.error || 'שגיאה במחיקת האירוע', 'שגיאה', 'error')
-                          } else {
-                            showAlert('האירוע נמחק בהצלחה!', 'הצלחה', 'success')
+                          try {
+                            const res = await deleteShopEvent(e.id)
+                            if (!res.success) {
+                              showAlert(res.error || 'שגיאה במחיקת האירוע', 'שגיאה', 'error')
+                            } else {
+                              showAlert('האירוע נמחק בהצלחה!', 'הצלחה', 'success')
+                              router.refresh()
+                            }
+                          } catch (err: any) {
+                            showAlert(err.message || 'שגיאה במחיקת האירוע', 'שגיאה', 'error')
+                          } finally {
+                            setGlobalLoading(false)
                           }
                         }, 'מחיקת אירוע')
                       }}
-                      className="inline-flex p-2 bg-zinc-900 hover:bg-red-500/10 text-zinc-450 hover:text-red-400 rounded-lg transition-all cursor-pointer"
+                      className="inline-flex p-2 bg-zinc-900 hover:bg-red-500/10 text-zinc-455 hover:text-red-400 rounded-lg transition-all cursor-pointer"
                       title="מחק אירוע"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -219,12 +246,14 @@ export default function EventsTab({
       <EventModal
         isOpen={isEventModalOpen}
         onClose={() => setIsEventModalOpen(false)}
+        setGlobalLoading={setGlobalLoading}
       />
 
       <DuplicateEventModal
         isOpen={isDuplicateModalOpen}
         onClose={() => setIsDuplicateModalOpen(false)}
         sourceEvent={duplicateSourceEvent}
+        setGlobalLoading={setGlobalLoading}
       />
     </div>
   )
