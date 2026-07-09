@@ -1,7 +1,7 @@
 import webpush from 'web-push'
 import { db } from '@/db'
-import { pushSubscriptions } from '@/db/schema'
-import { eq, inArray } from 'drizzle-orm'
+import { profiles, pushSubscriptions } from '@/db/schema'
+import { and, eq, inArray, or } from 'drizzle-orm'
 
 export interface PushPayload {
   title: string
@@ -110,13 +110,40 @@ export async function getSubscriptionsForUser(userId: string) {
     .where(eq(pushSubscriptions.user_id, userId))
 }
 
-export async function getAllSubscriptions() {
+const SUBSCRIPTION_COLUMNS = {
+  id: pushSubscriptions.id,
+  endpoint: pushSubscriptions.endpoint,
+  p256dh: pushSubscriptions.p256dh,
+  auth: pushSubscriptions.auth,
+}
+
+/**
+ * Staff only: approved dashboard users and admins.
+ *
+ * Task reminders must never reach shop customers, who subscribe from their
+ * personal area and share this same table.
+ */
+export async function getStaffSubscriptions() {
   return db
-    .select({
-      id: pushSubscriptions.id,
-      endpoint: pushSubscriptions.endpoint,
-      p256dh: pushSubscriptions.p256dh,
-      auth: pushSubscriptions.auth,
-    })
+    .select(SUBSCRIPTION_COLUMNS)
     .from(pushSubscriptions)
+    .innerJoin(profiles, eq(pushSubscriptions.user_id, profiles.id))
+    .where(
+      and(
+        eq(profiles.is_blocked, false),
+        or(eq(profiles.is_approved, true), eq(profiles.is_admin, true))
+      )
+    )
+}
+
+/**
+ * Everyone opted in who is not blocked — customers and staff alike.
+ * Used for storefront announcements such as "a new event has opened".
+ */
+export async function getCustomerSubscriptions() {
+  return db
+    .select(SUBSCRIPTION_COLUMNS)
+    .from(pushSubscriptions)
+    .innerJoin(profiles, eq(pushSubscriptions.user_id, profiles.id))
+    .where(eq(profiles.is_blocked, false))
 }

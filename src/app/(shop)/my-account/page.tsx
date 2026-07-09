@@ -4,7 +4,9 @@ import React, { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { fetchUserOrders, getReorderProducts } from './actions'
 import { useCart } from '@/components/cart-context'
-import { User, ClipboardList, Calendar, Loader2, ArrowLeft, RotateCcw, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, MapPin, Clock } from 'lucide-react'
+import { User, ClipboardList, Calendar, Loader2, ArrowLeft, RotateCcw, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, MapPin, Clock, BellRing } from 'lucide-react'
+import { PushToggle } from '@/components/PushToggle'
+import { useCustomDialogs } from '@/hooks/useCustomDialogs'
 
 interface OrderItem {
   id: string
@@ -31,6 +33,7 @@ function AccountContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { addToCart, eventId } = useCart()
+  const { showAlert, CustomDialogs } = useCustomDialogs()
 
   const [loading, setLoading] = useState(true)
   const [orders, setOrders] = useState<Order[]>([])
@@ -222,6 +225,28 @@ function AccountContent() {
           </div>
         </div>
       )}
+
+      {/* Push notification preference (per device) */}
+      <div className="p-4 sm:p-5 bg-zinc-950 border border-zinc-900 rounded-xl sm:rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <BellRing className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-bold text-xs sm:text-sm text-white">התראות על פתיחת הזמנות</h3>
+            <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+              קבלו הודעה לנייד ברגע שנפתחת הזמנה חדשה לשבת או לחג.
+              ההגדרה נשמרת לכל מכשיר בנפרד וניתן לכבות אותה בכל רגע.
+            </p>
+          </div>
+        </div>
+        <div className="shrink-0">
+          <PushToggle
+            onError={(m) => showAlert(m, 'התראות', 'error')}
+            onInfo={(m) => showAlert(m, 'התראות', 'success')}
+          />
+        </div>
+      </div>
+
+      <CustomDialogs />
 
       {/* 2. Order History List */}
       <div className="space-y-4 sm:space-y-6">

@@ -23,7 +23,7 @@ export async function POST() {
     }
 
     const result = await sendToSubscriptions(subs, {
-      title: 'התראת בדיקה ✅',
+      title: 'התראת בדיקה',
       body: 'ההתראות מוגדרות כראוי. כאן יופיעו תזכורות המשימות שלך.',
       url: '/tasks',
       tag: 'taama-test',

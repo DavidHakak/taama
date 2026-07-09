@@ -4,6 +4,8 @@ import { db } from '@/db'
 import { shopProducts, shopEvents, shopOrders, profiles, shopProductIngredients, shopPromotions, shopCoupons, shopOrderItems, shopProductVariants, storeSettings } from '@/db/schema'
 import { eq, and, not, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
+import { createClient as createSupabaseServerClient } from '@/utils/supabase/server'
+import { getCustomerSubscriptions, sendToSubscriptions } from '@/utils/push'
 
 // --- Shop Products CRUD ---
 export async function createShopProduct(data: {
@@ -250,6 +252,76 @@ export async function deleteShopEvent(id: string) {
   } catch (err: any) {
     console.error('Error deleting event:', err)
     return { success: false, error: err.message || 'שגיאה במהלך מחיקת האירוע' }
+  }
+}
+
+/**
+ * Pushes "the order for <event> is open" to every opted-in customer.
+ *
+ * This is the one action here with a blast radius outside the dashboard, so it
+ * verifies the caller is approved staff rather than trusting the middleware.
+ */
+export async function sendEventAnnouncement(eventId: string) {
+  try {
+    const supabase = await createSupabaseServerClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      return { success: false, error: 'נדרשת התחברות' }
+    }
+
+    const [profile] = await db
+      .select({ isApproved: profiles.is_approved, isAdmin: profiles.is_admin })
+      .from(profiles)
+      .where(eq(profiles.id, user.id))
+      .limit(1)
+
+    if (!profile || (!profile.isApproved && !profile.isAdmin)) {
+      return { success: false, error: 'אין הרשאה לשלוח התראות' }
+    }
+
+    const [event] = await db
+      .select({ id: shopEvents.id, name: shopEvents.name, isActive: shopEvents.is_active })
+      .from(shopEvents)
+      .where(eq(shopEvents.id, eventId))
+      .limit(1)
+
+    if (!event) {
+      return { success: false, error: 'האירוע לא נמצא' }
+    }
+    if (!event.isActive) {
+      return {
+        success: false,
+        error: 'האירוע סגור להזמנות. יש לפתוח את המכירה לפני שליחת ההתראה.',
+      }
+    }
+
+    const subscriptions = await getCustomerSubscriptions()
+    if (subscriptions.length === 0) {
+      return { success: false, error: 'אין לקוחות שהפעילו התראות' }
+    }
+
+    const result = await sendToSubscriptions(subscriptions, {
+      title: 'נפתחה ההזמנה',
+      body: `נפתחה ההזמנה ל${event.name}`,
+      url: '/',
+      // Distinct per event, so a new announcement does not silently replace an
+      // older one the customer has not opened yet.
+      tag: `taama-event-${event.id}`,
+    })
+
+    await db
+      .update(shopEvents)
+      .set({ announced_at: new Date() })
+      .where(eq(shopEvents.id, eventId))
+
+    revalidatePath('/shop-admin/events')
+    return { success: true, sent: result.sent, failed: result.failed }
+  } catch (err: any) {
+    console.error('Error sending event announcement:', err)
+    return { success: false, error: err.message || 'שגיאה בשליחת ההתראות' }
   }
 }
 

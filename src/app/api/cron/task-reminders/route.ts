@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/db'
 import { tasks, taskCategories } from '@/db/schema'
 import { and, eq, isNotNull, lte, ne } from 'drizzle-orm'
-import { getAllSubscriptions, sendToSubscriptions } from '@/utils/push'
+import { getStaffSubscriptions, sendToSubscriptions } from '@/utils/push'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +22,16 @@ function todayInIsrael(): string {
   }).format(new Date())
 }
 
+/** Calendar-day arithmetic on a `YYYY-MM-DD` string, via UTC to dodge DST. */
+function addDays(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const shifted = new Date(Date.UTC(y, m - 1, d + days))
+  return shifted.toISOString().slice(0, 10)
+}
+
+/** How many days ahead the digest looks for upcoming work. */
+const LOOKAHEAD_DAYS = 7
+
 function isAuthorized(request: Request): boolean {
   const secret = process.env.CRON_SECRET
   if (!secret) return false
@@ -35,9 +45,11 @@ async function handler(request: Request) {
   }
 
   const today = todayInIsrael()
+  const horizon = addDays(today, LOOKAHEAD_DAYS)
 
   try {
-    // Everything still open whose deadline has arrived or passed.
+    // Everything still open that is overdue, due today, or falls inside the
+    // next week. Anything further out is not worth waking a phone for.
     const dueRows = await db
       .select({
         id: tasks.id,
@@ -52,36 +64,43 @@ async function handler(request: Request) {
         and(
           ne(tasks.status, 'done'),
           isNotNull(tasks.due_date),
-          lte(tasks.due_date, today)
+          lte(tasks.due_date, horizon)
         )
       )
 
-    const dueToday = dueRows.filter((r) => r.dueDate === today)
     const overdue = dueRows.filter((r) => r.dueDate !== null && r.dueDate < today)
+    const dueToday = dueRows.filter((r) => r.dueDate === today)
+    const upcoming = dueRows.filter((r) => r.dueDate !== null && r.dueDate > today)
 
     if (dueRows.length === 0) {
-      return NextResponse.json({ ok: true, skipped: 'nothing due', today })
+      return NextResponse.json({ ok: true, skipped: 'nothing due', today, horizon })
     }
 
+    const count = (n: number, one: string, many: string) =>
+      n === 1 ? one : `${n} ${many}`
+
     const parts: string[] = []
-    if (dueToday.length > 0) {
-      parts.push(
-        dueToday.length === 1 ? 'משימה אחת להיום' : `${dueToday.length} משימות להיום`
-      )
-    }
-    if (overdue.length > 0) {
-      parts.push(overdue.length === 1 ? 'משימה אחת באיחור' : `${overdue.length} משימות באיחור`)
-    }
+    if (overdue.length > 0) parts.push(count(overdue.length, 'משימה אחת באיחור', 'משימות באיחור'))
+    if (dueToday.length > 0) parts.push(count(dueToday.length, 'משימה אחת להיום', 'משימות להיום'))
+    if (upcoming.length > 0) parts.push(count(upcoming.length, 'משימה אחת השבוע', 'משימות השבוע'))
 
     // Name the single task when there is exactly one; a bare count is useless.
     const only = dueRows.length === 1 ? dueRows[0] : null
     const body = only
       ? `${only.categoryName}: ${only.title}`
-      : `${parts.join(' ו-')}. לחצו לפתיחת רשימת המשימות.`
+      : `${parts.join(', ')}. לחצו לפתיחת רשימת המשימות.`
 
-    const subscriptions = await getAllSubscriptions()
+    // Lead with the most urgent bucket that actually has something in it.
+    const title = overdue.length
+      ? 'יש משימות באיחור'
+      : dueToday.length
+        ? 'יש משימות להיום'
+        : 'יש משימות ממתינות'
+
+    // Staff only — customers must not receive internal task reminders.
+    const subscriptions = await getStaffSubscriptions()
     const result = await sendToSubscriptions(subscriptions, {
-      title: only ? (overdue.length ? 'משימה באיחור' : 'משימה להיום') : 'סיכום המשימות שלך',
+      title,
       body,
       url: '/tasks',
       tag: 'taama-daily-digest',
@@ -90,8 +109,10 @@ async function handler(request: Request) {
     return NextResponse.json({
       ok: true,
       today,
-      dueToday: dueToday.length,
+      horizon,
       overdue: overdue.length,
+      dueToday: dueToday.length,
+      upcoming: upcoming.length,
       devices: subscriptions.length,
       ...result,
     })

@@ -30,8 +30,10 @@ self.addEventListener('push', (event) => {
   const options = {
     body: payload.body || '',
     icon: payload.icon || '/icon-192x192.png',
-    // Android draws the badge as the monochrome status-bar icon.
-    badge: '/icon-192x192.png',
+    // Android keeps ONLY this image's alpha channel and paints it white, so it
+    // must be a transparent silhouette. A full-colour icon here renders as a
+    // solid white square.
+    badge: '/badge-96x96.png',
     dir: 'rtl',
     lang: 'he',
     // Replaces an earlier digest instead of stacking duplicates.

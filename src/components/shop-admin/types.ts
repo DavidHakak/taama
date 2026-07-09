@@ -37,6 +37,7 @@ export interface Event {
   pickup_date: string
   is_active: boolean
   is_special: boolean
+  announced_at?: string | Date | null
 }
 
 export interface OrderItem {

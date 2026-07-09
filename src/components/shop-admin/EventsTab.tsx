@@ -1,8 +1,8 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Plus, Calendar, Loader2, PlusCircle, Copy, Trash2 } from 'lucide-react'
-import { toggleEventStatus, deleteShopEvent, createShopEvent } from '@/app/(dashboard)/shop-admin/actions'
+import { Plus, Calendar, Loader2, PlusCircle, Copy, Trash2, BellRing } from 'lucide-react'
+import { toggleEventStatus, deleteShopEvent, createShopEvent, sendEventAnnouncement } from '@/app/(dashboard)/shop-admin/actions'
 import { getHebcalRecommendations } from '@/app/(dashboard)/shopping-list/actions'
 import { useRouter } from 'next/navigation'
 import { Event } from './types'
@@ -203,6 +203,47 @@ export default function EventsTab({
                         }`}
                     >
                       {e.is_active ? 'סגור מכירה' : 'פתח מכירה'}
+                    </button>
+                    <button
+                      disabled={!e.is_active}
+                      onClick={() => {
+                        const already = !!e.announced_at
+                        const message = already
+                          ? `כבר נשלחה התראה על "${e.name}" בתאריך ${new Date(e.announced_at as string).toLocaleString('he-IL')}. לשלוח שוב לכל הלקוחות?`
+                          : `לשלוח התראה לכל הלקוחות שהפעילו התראות: "נפתחה ההזמנה ל${e.name}"?`
+
+                        showConfirm(message, async () => {
+                          setGlobalLoading(true)
+                          try {
+                            const res = await sendEventAnnouncement(e.id)
+                            if (!res.success) {
+                              showAlert(res.error || 'שגיאה בשליחת ההתראות', 'שגיאה', 'error')
+                            } else {
+                              showAlert(`ההתראה נשלחה ל-${res.sent} מכשירים.`, 'הצלחה', 'success')
+                              router.refresh()
+                            }
+                          } catch (err: any) {
+                            showAlert(err.message || 'שגיאה בשליחת ההתראות', 'שגיאה', 'error')
+                          } finally {
+                            setGlobalLoading(false)
+                          }
+                        }, 'שליחת התראה ללקוחות')
+                      }}
+                      className={`inline-flex p-2 rounded-lg transition-all ${!e.is_active
+                        ? 'bg-zinc-900 text-zinc-700 cursor-not-allowed'
+                        : e.announced_at
+                          ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 cursor-pointer'
+                          : 'bg-zinc-900 text-zinc-400 hover:bg-amber-500/10 hover:text-amber-500 cursor-pointer'
+                        }`}
+                      title={
+                        !e.is_active
+                          ? 'יש לפתוח את המכירה לפני שליחת התראה'
+                          : e.announced_at
+                            ? `התראה כבר נשלחה (${new Date(e.announced_at as string).toLocaleDateString('he-IL')}) — לחצו לשליחה חוזרת`
+                            : 'שלח התראה ללקוחות על פתיחת ההזמנה'
+                      }
+                    >
+                      <BellRing className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => openDuplicateModal(e)}

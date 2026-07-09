@@ -73,6 +73,7 @@ export const shopEvents = pgTable('shop_events', {
   pickup_date: date('pickup_date').notNull(),
   is_active: boolean('is_active').default(true).notNull(),
   is_special: boolean('is_special').default(false).notNull(),
+  announced_at: timestamp('announced_at', { withTimezone: true }),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
