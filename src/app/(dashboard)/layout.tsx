@@ -26,6 +26,7 @@ import {
   ChevronDown,
   ChevronUp,
   Calendar,
+  ListTodo,
 } from 'lucide-react'
 import React from 'react'
 
@@ -164,6 +165,7 @@ export default function DashboardLayout({
 
   const managementItems = [
     ...(isAdmin ? [{ name: 'ניהול משתמשים', href: '/users', icon: User }] : []),
+    { name: 'ניהול משימות', href: '/tasks', icon: ListTodo },
     { name: 'אנליטיקות וסטטיסטיקות', href: '/analytics', icon: TrendingUp },
   ]
 

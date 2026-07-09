@@ -4,8 +4,8 @@
   "description": "מערכת ניהול ותמחור לקייטרינג טעמא",
   "start_url": "/dashboard",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#faf7f1",
+  "theme_color": "#faf7f1",
   "orientation": "portrait",
   "icons": [
     {

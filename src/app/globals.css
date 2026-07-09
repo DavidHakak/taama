@@ -2,36 +2,51 @@
 
 :root {
   /* ==========================================================================
-     Template A: Dashboard Theme (White & Orange)
+     Template A: Dashboard Theme (Cream, Antique Gold & Deep Olive)
+     Surfaces run cream -> white; text runs deep olive green.
+     Every text token below clears WCAG AA (>= 4.5:1) on the cream background.
      ========================================================================== */
-  --background: #ffffff;
-  --foreground: #18181b;
+  --background: #faf7f1;
+  /* soft cream page background */
+  --foreground: #2f3e30;
+  /* deep olive green, 10.6:1 on cream */
   --black-secondary: #000000;
 
   --color-zinc-950-val: #ffffff;
   /* pure white card backgrounds */
-  --color-zinc-900-val: #f4f4f5;
-  /* light gray panels */
-  --color-zinc-850-val: #e4e4e7;
-  --color-zinc-800-val: #e4e4e7;
-  /* light border */
-  --color-zinc-700-val: #d4d4d8;
-  --color-zinc-650-val: #a1a1aa;
-  --color-zinc-600-val: #71717a;
-  --color-zinc-500-val: #71717a;
-  --color-zinc-400-val: #52525b;
-  --color-zinc-300-val: #27272a;
-  --color-zinc-200-val: #18181b;
-  --color-zinc-100-val: #18181b;
-  --color-zinc-50-val: #09090b;
+  --color-zinc-900-val: #eaeee9;
+  /* olive-tinted panels + hairline borders */
+  --color-zinc-850-val: #e6dcc6;
+  /* warm sand */
+  --color-zinc-800-val: #d8dfd7;
+  /* defined olive border */
+  --color-zinc-700-val: #c3cdc3;
+  --color-zinc-650-val: #9aa89b;
+  --color-zinc-600-val: #7f8f80;
+  --color-zinc-550-val: #6b7b6c;
+  --color-zinc-500-val: #5f6f60;
+  /* muted labels, 5.0:1 */
+  --color-zinc-450-val: #566557;
+  --color-zinc-400-val: #4c5b4d;
+  /* secondary body text, 6.2:1 */
+  --color-zinc-350-val: #445344;
+  --color-zinc-300-val: #3d4c3e;
+  --color-zinc-250-val: #374637;
+  --color-zinc-200-val: #344334;
+  --color-zinc-100-val: #2f3e30;
+  /* primary deep olive text, 10.6:1 */
+  --color-zinc-50-val: #1b241c;
 
-  /* Orange scale for Dashboard */
-  --color-amber-500-val: #f97316;
-  /* Orange */
-  --color-amber-600-val: #ea580c;
-  /* Darker orange */
-  --color-yellow-650-val: #c2410c;
-  --color-yellow-600-val: #ea580c;
+  /* Antique gold accent scale. The 500 step doubles as a text color and as a
+     solid fill under white text, so it is a deep gold rather than a bright one
+     (4.7:1 as text on cream, 5.0:1 as a fill behind white text). */
+  --color-amber-400-val: #9c7b26;
+  --color-amber-450-val: #93741f;
+  --color-amber-500-val: #8a6a20;
+  --color-amber-600-val: #6f5419;
+  --color-yellow-500-val: #7a5f1c;
+  --color-yellow-650-val: #5c4614;
+  --color-yellow-600-val: #6f5419;
 }
 
 .shop-theme {
@@ -54,20 +69,29 @@
   --color-zinc-700-val: #d0d7d1;
   --color-zinc-650-val: #b1bdb2;
   --color-zinc-600-val: #93a394;
-  --color-zinc-500-val: #748a76;
+  --color-zinc-550-val: #7d9280;
+  --color-zinc-500-val: #647a67;
+  /* darkened for AA on the cream storefront background */
+  --color-zinc-450-val: #5d715f;
   --color-zinc-400-val: #586b59;
   /* Medium olive green for body text */
+  --color-zinc-350-val: #4f6251;
   --color-zinc-300-val: #465a48;
+  --color-zinc-250-val: #405340;
   --color-zinc-200-val: #3b4c3d;
   --color-zinc-100-val: #2f3e30;
   /* Deep olive dark text */
   --color-zinc-50-val: #1b241c;
 
-  /* Map accents to rich gold */
+  /* Map accents to rich gold. The 500 step doubles as a text color, so it is
+     darkened from the display gold used for fills. */
+  --color-amber-400-val: #8a6a20;
+  --color-amber-450-val: #94721f;
   --color-amber-500-val: #cfa43c;
   /* Gold accent */
   --color-amber-600-val: #b58c30;
   /* Gold hover state */
+  --color-yellow-500-val: #b58c30;
   --color-yellow-650-val: #a07a28;
   --color-yellow-600-val: #cfa43c;
 }
@@ -87,19 +111,51 @@
   --color-zinc-850: var(--color-zinc-850-val);
   --color-zinc-800: var(--color-zinc-800-val);
   --color-zinc-700: var(--color-zinc-700-val);
+  --color-zinc-650: var(--color-zinc-650-val);
   --color-zinc-600: var(--color-zinc-600-val);
-  --color-zinc-550: var(--color-zinc-500-val);
+  --color-zinc-550: var(--color-zinc-550-val);
   --color-zinc-500: var(--color-zinc-500-val);
+  --color-zinc-450: var(--color-zinc-450-val);
   --color-zinc-400: var(--color-zinc-400-val);
+  --color-zinc-350: var(--color-zinc-350-val);
   --color-zinc-300: var(--color-zinc-300-val);
+  --color-zinc-250: var(--color-zinc-250-val);
   --color-zinc-200: var(--color-zinc-200-val);
   --color-zinc-100: var(--color-zinc-100-val);
   --color-zinc-50: var(--color-zinc-50-val);
 
   /* Dynamic amber/gold scale */
+  --color-amber-400: var(--color-amber-400-val);
+  --color-amber-450: var(--color-amber-450-val);
   --color-amber-500: var(--color-amber-500-val);
   --color-amber-600: var(--color-amber-600-val);
+  --color-amber-700: #5c4614;
+  --color-yellow-500: var(--color-yellow-500-val);
+  --color-yellow-650: var(--color-yellow-650-val);
   --color-yellow-600: var(--color-yellow-600-val);
+
+  /* Semantic status colors, muted toward the olive/gold palette and darkened
+     so they stay legible as text on the cream surfaces while still carrying
+     white text when used as a solid fill. */
+  --color-emerald-400: #4a7a4a;
+  --color-emerald-450: #447344;
+  --color-emerald-500: #3f6b3f;
+  --color-rose-300: #b83a41;
+  --color-rose-400: #a3282f;
+  --color-rose-450: #9e262d;
+  --color-rose-500: #a3282f;
+  --color-red-300: #b83a41;
+  --color-red-400: #a3282f;
+  --color-red-500: #a3282f;
+  --color-blue-400: #35617f;
+  --color-blue-500: #2c5578;
+  --color-sky-400: #35617f;
+  --color-sky-500: #2f6280;
+  --color-sky-600: #27536d;
+  --color-purple-400: #6a4472;
+  --color-purple-500: #5c3a63;
+  --color-teal-500: #1f6b63;
+  --color-indigo-500: #3f4a7a;
 }
 
 body {
@@ -157,11 +213,11 @@ body {
     color: #ffffff !important;
   }
 
-  /* Add subtle, elegant box shadows in light mode */
+  /* Add subtle, elegant box shadows in light mode (olive-tinted to sit on cream) */
   .bg-zinc-950,
   .bg-zinc-900,
   .bg-zinc-900\/60 {
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05), 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
+    box-shadow: 0 1px 3px 0 rgba(47, 62, 48, 0.07), 0 1px 2px -1px rgba(47, 62, 48, 0.05), 0 4px 6px -1px rgba(47, 62, 48, 0.05) !important;
   }
 }
 

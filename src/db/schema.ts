@@ -189,3 +189,42 @@ export const savedShoppingListItems = pgTable('saved_shopping_list_items', {
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
+// קטגוריות של משימות
+export const taskCategories = pgTable('task_categories', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  color: text('color').notNull().default('amber'),
+  position: integer('position').notNull().default(0),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+})
+
+// מנויי התראות דחיפה (שורה לכל מכשיר)
+export const pushSubscriptions = pgTable('push_subscriptions', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  user_id: uuid('user_id')
+    .references(() => profiles.id, { onDelete: 'cascade' })
+    .notNull(),
+  endpoint: text('endpoint').notNull().unique(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  user_agent: text('user_agent'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  last_success_at: timestamp('last_success_at', { withTimezone: true }),
+})
+
+// משימות בתוך קטגוריה
+export const tasks = pgTable('tasks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  category_id: uuid('category_id')
+    .references(() => taskCategories.id, { onDelete: 'cascade' })
+    .notNull(),
+  title: text('title').notNull(),
+  details: text('details'),
+  status: text('status').notNull().default('open'), // 'open' | 'in_progress' | 'waiting' | 'done'
+  priority: text('priority').notNull().default('normal'), // 'low' | 'normal' | 'high'
+  due_date: date('due_date'),
+  completed_at: timestamp('completed_at', { withTimezone: true }),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+})
+
