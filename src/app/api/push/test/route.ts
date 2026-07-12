@@ -26,6 +26,7 @@ export async function POST() {
       title: 'התראת בדיקה',
       body: 'ההתראות מוגדרות כראוי. כאן יופיעו תזכורות המשימות שלך.',
       url: '/tasks',
+      actionTitle: 'פתיחה',
       tag: 'taama-test',
     })
 

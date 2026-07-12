@@ -307,6 +307,7 @@ export async function sendEventAnnouncement(eventId: string) {
       title: 'נפתחה ההזמנה',
       body: `נפתחה ההזמנה ל${event.name}`,
       url: '/',
+      actionTitle: 'הזמן כעת',
       // Distinct per event, so a new announcement does not silently replace an
       // older one the customer has not opened yet.
       tag: `taama-event-${event.id}`,

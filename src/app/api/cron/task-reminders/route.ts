@@ -103,6 +103,7 @@ async function handler(request: Request) {
       title,
       body,
       url: '/tasks',
+      actionTitle: 'פתח משימות',
       tag: 'taama-daily-digest',
     })
 

@@ -8,6 +8,8 @@ export interface PushPayload {
   body: string
   url?: string
   tag?: string
+  /** Label of the notification's action button (the CTA). */
+  actionTitle?: string
 }
 
 export interface StoredSubscription {

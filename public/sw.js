@@ -26,6 +26,9 @@ self.addEventListener('push', (event) => {
   }
 
   const url = payload.url || '/tasks';
+  // The CTA label rides on the payload so each sender phrases its own button
+  // ("הזמן כעת" for a shop announcement, "פתח משימות" for a staff digest).
+  const actionTitle = payload.actionTitle || 'פתיחה';
 
   const options = {
     body: payload.body || '',
@@ -41,7 +44,7 @@ self.addEventListener('push', (event) => {
     renotify: true,
     vibrate: [120, 60, 120],
     data: { url },
-    actions: [{ action: 'open', title: 'פתח משימות' }],
+    actions: [{ action: 'open', title: actionTitle }],
   };
 
   event.waitUntil(

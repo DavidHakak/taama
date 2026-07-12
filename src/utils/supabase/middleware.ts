@@ -77,7 +77,8 @@ export async function updateSession(request: NextRequest) {
     path.startsWith('/shop-admin') ||
     path.startsWith('/shopping-list') ||
     path.startsWith('/analytics') ||
-    path.startsWith('/tasks')
+    path.startsWith('/tasks') ||
+    path.startsWith('/broadcast')
 
   // Define protected B2C shop routes
   const isProtectedShopRoute =

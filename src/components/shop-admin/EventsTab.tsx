@@ -58,6 +58,81 @@ export default function EventsTab({
     setIsDuplicateModalOpen(true)
   }
 
+  // Handlers are defined once and shared between the desktop table and the
+  // mobile card layout, so the two views can never drift apart.
+  const handleToggleStatus = async (e: Event) => {
+    setGlobalLoading(true)
+    try {
+      const res = await toggleEventStatus(e.id, !e.is_active)
+      if (res && !res.success) {
+        showAlert(res.error || 'שגיאה בשינוי סטטוס האירוע', 'שגיאה', 'error')
+      } else {
+        router.refresh()
+      }
+    } catch (err: any) {
+      showAlert(err.message || 'שגיאה בשינוי סטטוס האירוע', 'שגיאה', 'error')
+    } finally {
+      setGlobalLoading(false)
+    }
+  }
+
+  const handleAnnounce = (e: Event) => {
+    const already = !!e.announced_at
+    const message = already
+      ? `כבר נשלחה התראה על "${e.name}" בתאריך ${new Date(e.announced_at as string).toLocaleString('he-IL')}. לשלוח שוב לכל הלקוחות?`
+      : `לשלוח התראה לכל הלקוחות שהפעילו התראות: "נפתחה ההזמנה ל${e.name}"?`
+
+    showConfirm(message, async () => {
+      setGlobalLoading(true)
+      try {
+        const res = await sendEventAnnouncement(e.id)
+        if (!res.success) {
+          showAlert(res.error || 'שגיאה בשליחת ההתראות', 'שגיאה', 'error')
+        } else {
+          showAlert(`ההתראה נשלחה ל-${res.sent} מכשירים.`, 'הצלחה', 'success')
+          router.refresh()
+        }
+      } catch (err: any) {
+        showAlert(err.message || 'שגיאה בשליחת ההתראות', 'שגיאה', 'error')
+      } finally {
+        setGlobalLoading(false)
+      }
+    }, 'שליחת התראה ללקוחות')
+  }
+
+  const handleDelete = (e: Event) => {
+    showConfirm(`האם למחוק אירוע זה? פעולה זו תמחוק את האירוע רק במידה ואין עליו הזמנות.`, async () => {
+      setGlobalLoading(true)
+      try {
+        const res = await deleteShopEvent(e.id)
+        if (!res.success) {
+          showAlert(res.error || 'שגיאה במחיקת האירוע', 'שגיאה', 'error')
+        } else {
+          showAlert('האירוע נמחק בהצלחה!', 'הצלחה', 'success')
+          router.refresh()
+        }
+      } catch (err: any) {
+        showAlert(err.message || 'שגיאה במחיקת האירוע', 'שגיאה', 'error')
+      } finally {
+        setGlobalLoading(false)
+      }
+    }, 'מחיקת אירוע')
+  }
+
+  const announceButtonClass = (e: Event) =>
+    !e.is_active
+      ? 'bg-zinc-900 text-zinc-700 cursor-not-allowed'
+      : e.announced_at
+        ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 cursor-pointer'
+        : 'bg-zinc-900 text-zinc-400 hover:bg-amber-500/10 hover:text-amber-500 cursor-pointer'
+
+  const announceTitle = (e: Event) =>
+    !e.is_active
+      ? 'יש לפתוח את המכירה לפני שליחת התראה'
+      : e.announced_at
+        ? `התראה כבר נשלחה (${new Date(e.announced_at as string).toLocaleDateString('he-IL')}) — לחצו לשליחה חוזרת`
+        : 'שלח התראה ללקוחות על פתיחת ההזמנה'
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
       {/* Left Column: Hebcal Recommendations Panel */}
@@ -150,7 +225,8 @@ export default function EventsTab({
           </button>
         </div>
 
-        <div className="bg-zinc-950 border border-zinc-900 rounded-2xl overflow-x-auto shadow-xl">
+        {/* Desktop: table (md and up) */}
+        <div className="hidden md:block bg-zinc-950 border border-zinc-900 rounded-2xl overflow-x-auto shadow-xl">
           <table className="w-full text-right border-collapse">
             <thead>
               <tr className="border-b border-zinc-900 bg-zinc-950/40 text-zinc-400 text-xs font-bold uppercase tracking-wider">
@@ -163,13 +239,15 @@ export default function EventsTab({
             <tbody className="divide-y divide-zinc-900 text-zinc-300 text-sm">
               {events.map((e) => (
                 <tr key={e.id} className="hover:bg-zinc-900/10 transition-colors">
-                  <td className="py-4 px-6 font-bold text-zinc-100 flex items-center gap-2">
-                    <span>{e.name}</span>
-                    {e.is_special && (
-                      <span className="px-2 py-0.5 bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[10px] font-bold rounded-md">
-                        יום מיוחד
-                      </span>
-                    )}
+                  <td className="py-4 px-6 font-bold text-zinc-100">
+                    <div className="flex items-center gap-2">
+                      <span>{e.name}</span>
+                      {e.is_special && (
+                        <span className="px-2 py-0.5 bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[10px] font-bold rounded-md">
+                          יום מיוחד
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-4 px-6 font-mono font-medium">
                     {new Date(e.pickup_date).toLocaleDateString('he-IL')}
@@ -180,107 +258,116 @@ export default function EventsTab({
                       {e.is_active ? 'פעיל (הזמנות פתוחות)' : 'סגור'}
                     </span>
                   </td>
-                  <td className="py-4 px-6 text-left space-x-2 space-x-reverse">
-                    <button
-                      onClick={async () => {
-                        setGlobalLoading(true)
-                        try {
-                          const res = await toggleEventStatus(e.id, !e.is_active)
-                          if (res && !res.success) {
-                            showAlert(res.error || 'שגיאה בשינוי סטטוס האירוע', 'שגיאה', 'error')
-                          } else {
-                            router.refresh()
-                          }
-                        } catch (err: any) {
-                          showAlert(err.message || 'שגיאה בשינוי סטטוס האירוע', 'שגיאה', 'error')
-                        } finally {
-                          setGlobalLoading(false)
-                        }
-                      }}
-                      className={`inline-flex px-3 py-1.5 border rounded-lg text-xs font-bold transition-all cursor-pointer ${e.is_active
-                        ? 'bg-rose-500/5 hover:bg-rose-500/10 border-rose-500/10 text-rose-400'
-                        : 'bg-emerald-500/5 hover:bg-emerald-500/10 border-emerald-500/10 text-emerald-400'
-                        }`}
-                    >
-                      {e.is_active ? 'סגור מכירה' : 'פתח מכירה'}
-                    </button>
-                    <button
-                      disabled={!e.is_active}
-                      onClick={() => {
-                        const already = !!e.announced_at
-                        const message = already
-                          ? `כבר נשלחה התראה על "${e.name}" בתאריך ${new Date(e.announced_at as string).toLocaleString('he-IL')}. לשלוח שוב לכל הלקוחות?`
-                          : `לשלוח התראה לכל הלקוחות שהפעילו התראות: "נפתחה ההזמנה ל${e.name}"?`
-
-                        showConfirm(message, async () => {
-                          setGlobalLoading(true)
-                          try {
-                            const res = await sendEventAnnouncement(e.id)
-                            if (!res.success) {
-                              showAlert(res.error || 'שגיאה בשליחת ההתראות', 'שגיאה', 'error')
-                            } else {
-                              showAlert(`ההתראה נשלחה ל-${res.sent} מכשירים.`, 'הצלחה', 'success')
-                              router.refresh()
-                            }
-                          } catch (err: any) {
-                            showAlert(err.message || 'שגיאה בשליחת ההתראות', 'שגיאה', 'error')
-                          } finally {
-                            setGlobalLoading(false)
-                          }
-                        }, 'שליחת התראה ללקוחות')
-                      }}
-                      className={`inline-flex p-2 rounded-lg transition-all ${!e.is_active
-                        ? 'bg-zinc-900 text-zinc-700 cursor-not-allowed'
-                        : e.announced_at
-                          ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 cursor-pointer'
-                          : 'bg-zinc-900 text-zinc-400 hover:bg-amber-500/10 hover:text-amber-500 cursor-pointer'
-                        }`}
-                      title={
-                        !e.is_active
-                          ? 'יש לפתוח את המכירה לפני שליחת התראה'
-                          : e.announced_at
-                            ? `התראה כבר נשלחה (${new Date(e.announced_at as string).toLocaleDateString('he-IL')}) — לחצו לשליחה חוזרת`
-                            : 'שלח התראה ללקוחות על פתיחת ההזמנה'
-                      }
-                    >
-                      <BellRing className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => openDuplicateModal(e)}
-                      className="inline-flex p-2 bg-zinc-900 hover:bg-amber-500/10 text-zinc-400 hover:text-amber-500 rounded-lg transition-all cursor-pointer"
-                      title="שכפל אירוע לקבוצה חדשה"
-                    >
-                      <Copy className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        showConfirm(`האם למחוק אירוע זה? פעולה זו תמחוק את האירוע רק במידה ואין עליו הזמנות.`, async () => {
-                          setGlobalLoading(true)
-                          try {
-                            const res = await deleteShopEvent(e.id)
-                            if (!res.success) {
-                              showAlert(res.error || 'שגיאה במחיקת האירוע', 'שגיאה', 'error')
-                            } else {
-                              showAlert('האירוע נמחק בהצלחה!', 'הצלחה', 'success')
-                              router.refresh()
-                            }
-                          } catch (err: any) {
-                            showAlert(err.message || 'שגיאה במחיקת האירוע', 'שגיאה', 'error')
-                          } finally {
-                            setGlobalLoading(false)
-                          }
-                        }, 'מחיקת אירוע')
-                      }}
-                      className="inline-flex p-2 bg-zinc-900 hover:bg-red-500/10 text-zinc-455 hover:text-red-400 rounded-lg transition-all cursor-pointer"
-                      title="מחק אירוע"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                  <td className="py-4 px-6 text-left">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => handleToggleStatus(e)}
+                        className={`inline-flex px-3 py-1.5 border rounded-lg text-xs font-bold transition-all cursor-pointer ${e.is_active
+                          ? 'bg-rose-500/5 hover:bg-rose-500/10 border-rose-500/10 text-rose-400'
+                          : 'bg-emerald-500/5 hover:bg-emerald-500/10 border-emerald-500/10 text-emerald-400'
+                          }`}
+                      >
+                        {e.is_active ? 'סגור מכירה' : 'פתח מכירה'}
+                      </button>
+                      <button
+                        disabled={!e.is_active}
+                        onClick={() => handleAnnounce(e)}
+                        className={`inline-flex p-2 rounded-lg transition-all ${announceButtonClass(e)}`}
+                        title={announceTitle(e)}
+                      >
+                        <BellRing className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => openDuplicateModal(e)}
+                        className="inline-flex p-2 bg-zinc-900 hover:bg-amber-500/10 text-zinc-400 hover:text-amber-500 rounded-lg transition-all cursor-pointer"
+                        title="שכפל אירוע לקבוצה חדשה"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(e)}
+                        className="inline-flex p-2 bg-zinc-900 hover:bg-red-500/10 text-zinc-455 hover:text-red-400 rounded-lg transition-all cursor-pointer"
+                        title="מחק אירוע"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile: stacked cards (below md) */}
+        <div className="md:hidden space-y-3">
+          {events.length === 0 && (
+            <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 text-center text-xs font-semibold text-zinc-500">
+              אין עדיין אירועים.
+            </div>
+          )}
+          {events.map((e) => (
+            <div key={e.id} className="bg-zinc-950 border border-zinc-900 rounded-2xl p-4 shadow-lg">
+              {/* Title + status */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-black text-zinc-100 break-words">{e.name}</h3>
+                    {e.is_special && (
+                      <span className="px-2 py-0.5 bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[10px] font-bold rounded-md shrink-0">
+                        יום מיוחד
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-zinc-500 font-mono font-medium mt-1">
+                    איסוף: {new Date(e.pickup_date).toLocaleDateString('he-IL')}
+                  </p>
+                </div>
+                <span className={`shrink-0 inline-block px-2.5 py-1 rounded-full text-[10px] font-bold ${e.is_active ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-900 text-zinc-500 border border-zinc-800'
+                  }`}>
+                  {e.is_active ? 'פעיל' : 'סגור'}
+                </span>
+              </div>
+
+              {/* Actions: full-width primary, then an even icon row */}
+              <div className="mt-4 space-y-2">
+                <button
+                  onClick={() => handleToggleStatus(e)}
+                  className={`w-full inline-flex items-center justify-center px-3 py-2.5 border rounded-xl text-xs font-bold transition-all cursor-pointer ${e.is_active
+                    ? 'bg-rose-500/5 hover:bg-rose-500/10 border-rose-500/10 text-rose-400'
+                    : 'bg-emerald-500/5 hover:bg-emerald-500/10 border-emerald-500/10 text-emerald-400'
+                    }`}
+                >
+                  {e.is_active ? 'סגור מכירה' : 'פתח מכירה'}
+                </button>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    disabled={!e.is_active}
+                    onClick={() => handleAnnounce(e)}
+                    className={`inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[11px] font-bold transition-all ${announceButtonClass(e)}`}
+                    title={announceTitle(e)}
+                  >
+                    <BellRing className="h-4 w-4" />
+                    התראה
+                  </button>
+                  <button
+                    onClick={() => openDuplicateModal(e)}
+                    className="inline-flex items-center justify-center gap-1.5 py-2.5 bg-zinc-900 hover:bg-amber-500/10 text-zinc-400 hover:text-amber-500 rounded-xl text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    <Copy className="h-4 w-4" />
+                    שכפל
+                  </button>
+                  <button
+                    onClick={() => handleDelete(e)}
+                    className="inline-flex items-center justify-center gap-1.5 py-2.5 bg-zinc-900 hover:bg-red-500/10 text-zinc-455 hover:text-red-400 rounded-xl text-[11px] font-bold transition-all cursor-pointer"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    מחק
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
