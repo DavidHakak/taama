@@ -26,33 +26,50 @@ async function run() {
     `
     console.log('- profiles table created or verified.')
 
-    // Enable RLS on profiles
+    // Enable RLS on profiles and business tables
     await sql`alter table public.profiles enable row level security;`
+    await sql`alter table public.ingredients enable row level security;`
+    await sql`alter table public.dishes enable row level security;`
+    await sql`alter table public.dish_ingredients enable row level security;`
+    await sql`alter table public.orders enable row level security;`
+    await sql`alter table public.order_dishes enable row level security;`
 
     // 2. Helper functions to check is_admin and is_approved securely
     await sql`
       create or replace function public.check_is_admin()
-      returns boolean security definer as $$
+      returns boolean 
+      language plpgsql 
+      security definer 
+      set search_path = ''
+      as $$
       begin
         return exists (
           select 1 from public.profiles
           where id = auth.uid() and is_admin = true
         );
       end;
-      $$ language plpgsql;
+      $$;
     `
     await sql`
       create or replace function public.check_is_approved()
-      returns boolean security definer as $$
+      returns boolean 
+      language plpgsql 
+      security definer 
+      set search_path = ''
+      as $$
       begin
         return exists (
           select 1 from public.profiles
           where id = auth.uid() and is_approved = true
         );
       end;
-      $$ language plpgsql;
+      $$;
     `
-    console.log('- check functions defined.')
+    console.log('- check functions defined with search_path.')
+
+    // Revoke public execute on SECURITY DEFINER RPC functions
+    await sql`revoke execute on function public.check_is_admin() from public, anon, authenticated;`
+    await sql`revoke execute on function public.check_is_approved() from public, anon, authenticated;`
 
     // 3. Set policies on profiles table
     await sql`drop policy if exists "Admins can view and edit all profiles" on public.profiles;`
@@ -119,7 +136,11 @@ async function run() {
     // 5. Trigger for new signups
     await sql`
       create or replace function public.handle_new_user()
-      returns trigger as $$
+      returns trigger 
+      language plpgsql 
+      security definer 
+      set search_path = ''
+      as $$
       begin
         insert into public.profiles (id, email, is_approved, is_admin)
         values (
@@ -127,11 +148,13 @@ async function run() {
           new.email,
           case when new.email = 'davidhakak19@gmail.com' then true else false end,
           case when new.email = 'davidhakak19@gmail.com' then true else false end
-        );
+        )
+        on conflict (id) do nothing;
         return new;
       end;
-      $$ language plpgsql security definer;
+      $$;
     `
+    await sql`revoke execute on function public.handle_new_user() from public, anon, authenticated;`
 
     await sql`drop trigger if exists on_auth_user_created on auth.users;`
     await sql`
