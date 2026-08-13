@@ -1,9 +1,9 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import { createClient } from '@/utils/supabase/client'
-import { aggregateOrderIngredients } from '@/utils/costing'
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { createClient } from "@/utils/supabase/client";
+import { aggregateOrderIngredients } from "@/utils/costing";
 import {
   ClipboardList,
   Plus,
@@ -15,64 +15,65 @@ import {
   AlertCircle,
   X,
   Filter,
-} from 'lucide-react'
+} from "lucide-react";
 
 interface Ingredient {
-  id: string
-  name: string
-  unit: string
-  cost_per_unit: number
+  id: string;
+  name: string;
+  unit: string;
+  cost_per_unit: number;
 }
 
 interface DishIngredient {
-  quantity: number
-  ingredients: Ingredient
+  quantity: number;
+  ingredients: Ingredient;
 }
 
 interface Dish {
-  name: string
-  category: string
-  dish_ingredients: DishIngredient[]
+  name: string;
+  category: string;
+  dish_ingredients: DishIngredient[];
 }
 
 interface OrderDish {
-  dishes: Dish
+  dishes: Dish;
 }
 
 interface Order {
-  id: string
-  client_name: string
-  event_date: string
-  status: string
-  portions: number
-  created_at: string
-  quote_base_price?: number
-  quote_starters_extra?: number
-  quote_portion_discount?: number
-  quote_global_discount?: number
-  quote_delivery_type?: string
-  quote_delivery_price?: number
-  actual_cost?: number
-  order_dishes: OrderDish[]
+  id: string;
+  client_name: string;
+  event_date: string;
+  status: string;
+  portions: number;
+  created_at: string;
+  quote_base_price?: number;
+  quote_starters_extra?: number;
+  quote_portion_discount?: number;
+  quote_global_discount?: number;
+  quote_delivery_type?: string;
+  quote_delivery_price?: number;
+  actual_cost?: number;
+  order_dishes: OrderDish[];
 }
 
 export default function OrdersPage() {
-  const supabase = createClient()
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  
-  const [orders, setOrders] = useState<Order[]>([])
-  const [ingredientsCatalog, setIngredientsCatalog] = useState<any[]>([])
-  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const supabase = createClient();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [ingredientsCatalog, setIngredientsCatalog] = useState<any[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
   const fetchOrders = async () => {
     try {
-      setLoading(true)
-      
+      setLoading(true);
+
       // Fetch orders with nested dish & ingredient data
       const { data, error: fetchError } = await supabase
-        .from('orders')
-        .select(`
+        .from("orders")
+        .select(
+          `
           id,
           client_name,
           event_date,
@@ -101,95 +102,105 @@ export default function OrdersPage() {
               )
             )
           )
-        `)
-        .order('event_date', { ascending: false })
+        `,
+        )
+        .order("event_date", { ascending: false });
 
-      if (fetchError) throw fetchError
-      setOrders(data as unknown as Order[] || [])
+      if (fetchError) throw fetchError;
+      setOrders((data as unknown as Order[]) || []);
 
       // Fetch ingredients catalog
       const { data: ingData, error: ingError } = await supabase
-        .from('ingredients')
-        .select('id, name, unit, cost_per_unit')
+        .from("ingredients")
+        .select("id, name, unit, cost_per_unit");
 
-      if (ingError) throw ingError
-      setIngredientsCatalog(ingData || [])
-
+      if (ingError) throw ingError;
+      setIngredientsCatalog(ingData || []);
     } catch (err: unknown) {
-      console.error('Error fetching orders:', err)
-      setError(err instanceof Error ? err.message : 'שגיאה בטעינת הזמנות')
+      console.error("Error fetching orders:", err);
+      setError(err instanceof Error ? err.message : "שגיאה בטעינת הזמנות");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    fetchOrders()
-  }, [supabase])
+    fetchOrders();
+  }, [supabase]);
 
   // Helpers to calculate costing
   const calculateOrderCost = (order: Order) => {
     return aggregateOrderIngredients(
       order.order_dishes,
       order.portions || 10,
-      ingredientsCatalog
-    ).grandTotal
-  }
+      ingredientsCatalog,
+    ).grandTotal;
+  };
 
   const calculateOrderRevenue = (order: Order) => {
-    const basePrice = Number(order.quote_base_price || 0)
-    const startersExtra = Number(order.quote_starters_extra || 0)
-    const portionDiscount = Number(order.quote_portion_discount || 0)
-    const globalDiscount = Number(order.quote_global_discount || 0)
-    const portionsCount = Number(order.portions || 0)
+    const basePrice = Number(order.quote_base_price || 0);
+    const startersExtra = Number(order.quote_starters_extra || 0);
+    const portionDiscount = Number(order.quote_portion_discount || 0);
+    const globalDiscount = Number(order.quote_global_discount || 0);
+    const portionsCount = Number(order.portions || 0);
 
     const hasStarters = order.order_dishes?.some(
-      (od) => od.dishes?.category === 'ראשונות'
-    )
+      (od) => od.dishes?.category === "ראשונות",
+    );
 
-    const finalPortionPrice = basePrice + (hasStarters ? startersExtra : 0) - portionDiscount
-    const portionsTotal = finalPortionPrice * portionsCount
-    const revenue = portionsTotal - globalDiscount
-    return revenue
-  }
+    const finalPortionPrice =
+      basePrice + (hasStarters ? startersExtra : 0) - portionDiscount;
+    const portionsTotal = finalPortionPrice * portionsCount;
+    const revenue = portionsTotal - globalDiscount;
+    return revenue;
+  };
 
   // Delete Order
   const handleDeleteOrder = async (id: string) => {
-    if (!confirm('האם אתה בטוח שברצונך למחוק אירוע זה? כל המנות המשויכות אליו יימחקו מהמערכת.')) {
-      return
+    if (
+      !confirm(
+        "האם אתה בטוח שברצונך למחוק אירוע זה? כל המנות המשויכות אליו יימחקו מהמערכת.",
+      )
+    ) {
+      return;
     }
 
     try {
-      setLoading(true)
+      setLoading(true);
       const { error: deleteError } = await supabase
-        .from('orders')
+        .from("orders")
         .delete()
-        .eq('id', id)
+        .eq("id", id);
 
-      if (deleteError) throw deleteError
-      fetchOrders()
+      if (deleteError) throw deleteError;
+      fetchOrders();
     } catch (err: unknown) {
-      console.error('Error deleting order:', err)
-      setError(err instanceof Error ? err.message : 'שגיאה במחיקת האירוע')
-      setLoading(false)
+      console.error("Error deleting order:", err);
+      setError(err instanceof Error ? err.message : "שגיאה במחיקת האירוע");
+      setLoading(false);
     }
-  }
+  };
 
   // Filter orders by status
   const filteredOrders = orders.filter((order) => {
-    if (statusFilter === 'all') return true
-    return order.status.toLowerCase() === statusFilter.toLowerCase()
-  })
+    if (statusFilter === "all") return true;
+    return order.status.toLowerCase() === statusFilter.toLowerCase();
+  });
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'Draft': return 'טיוטה'
-      case 'Confirmed': return 'מאושר'
-      case 'Completed': return 'הושלם'
-      case 'Paid': return 'שולם'
-      default: return status
+      case "Draft":
+        return "טיוטה";
+      case "Confirmed":
+        return "מאושר";
+      case "Completed":
+        return "הושלם";
+      case "Paid":
+        return "שולם";
+      default:
+        return status;
     }
-  }
+  };
 
   return (
     <div className="space-y-8" dir="rtl">
@@ -200,7 +211,9 @@ export default function OrdersPage() {
             <ClipboardList className="h-8 w-8 text-amber-500" />
             הזמנות ואירועים
           </h1>
-          <p className="text-zinc-400 text-sm mt-1">נהל אירועים, סקור דוחות עלויות וחשב כמויות רכש מרוכזות.</p>
+          <p className="text-zinc-400 text-sm mt-1">
+            נהל אירועים, סקור דוחות עלויות וחשב כמויות רכש מרוכזות.
+          </p>
         </div>
         <Link
           href="/orders/new"
@@ -215,7 +228,10 @@ export default function OrdersPage() {
         <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl flex items-center gap-3 text-right">
           <AlertCircle className="h-5 w-5 shrink-0" />
           <p className="text-xs font-semibold">{error}</p>
-          <button onClick={() => setError(null)} className="mr-auto ml-0 text-red-400 hover:text-red-300">
+          <button
+            onClick={() => setError(null)}
+            className="mr-auto ml-0 text-red-400 hover:text-red-300"
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -225,31 +241,33 @@ export default function OrdersPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-zinc-950 p-4 border border-zinc-900 rounded-2xl text-right">
         <div className="flex items-center gap-2">
           <Filter className="h-4.5 w-4.5 text-zinc-500" />
-          <span className="text-xs font-semibold uppercase text-zinc-400 tracking-wider">סינון לפי סטטוס:</span>
+          <span className="text-xs font-semibold uppercase text-zinc-400 tracking-wider">
+            סינון לפי סטטוס:
+          </span>
         </div>
 
         <div className="flex flex-wrap gap-2">
           {[
-            { label: 'הכל', value: 'all' },
-            { label: 'טיוטה', value: 'draft' },
-            { label: 'מאושר', value: 'confirmed' },
-            { label: 'הושלם', value: 'completed' },
-            { label: 'שולם', value: 'paid' }
+            { label: "הכל", value: "all" },
+            { label: "טיוטה", value: "draft" },
+            { label: "מאושר", value: "confirmed" },
+            { label: "הושלם", value: "completed" },
+            { label: "שולם", value: "paid" },
           ].map((status) => {
-            const isSelected = statusFilter === status.value
+            const isSelected = statusFilter === status.value;
             return (
               <button
                 key={status.value}
                 onClick={() => setStatusFilter(status.value)}
                 className={`px-4 py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
                   isSelected
-                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                    : 'bg-black/40 text-zinc-400 border-zinc-900 hover:text-zinc-200'
+                    ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                    : "bg-black/40 text-zinc-400 border-zinc-900 hover:text-zinc-200"
                 }`}
               >
                 {status.label}
               </button>
-            )
+            );
           })}
         </div>
       </div>
@@ -264,9 +282,13 @@ export default function OrdersPage() {
         ) : filteredOrders.length === 0 ? (
           <div className="text-center py-16">
             <ClipboardList className="h-12 w-12 text-zinc-700 mx-auto mb-4" />
-            <p className="text-zinc-550 text-zinc-500 text-sm font-medium">לא נמצאו הזמנות קייטרינג במערכת.</p>
-            {statusFilter !== 'all' && (
-              <p className="text-zinc-600 text-xs mt-1">נסה לאפס או לשנות את סינון הסטטוס.</p>
+            <p className="text-zinc-550 text-zinc-500 text-sm font-medium">
+              לא נמצאו הזמנות קייטרינג במערכת.
+            </p>
+            {statusFilter !== "all" && (
+              <p className="text-zinc-600 text-xs mt-1">
+                נסה לאפס או לשנות את סינון הסטטוס.
+              </p>
             )}
           </div>
         ) : (
@@ -286,22 +308,32 @@ export default function OrdersPage() {
               </thead>
               <tbody className="divide-y divide-zinc-900 text-zinc-300 text-sm">
                 {filteredOrders.map((order) => {
-                  const estCost = calculateOrderCost(order)
-                  const hasActualCost = order.actual_cost !== null && order.actual_cost !== undefined
-                  const actualCostNum = hasActualCost ? Number(order.actual_cost) : 0
-                  const costToUse = hasActualCost ? actualCostNum : estCost
-                  const revenue = calculateOrderRevenue(order)
-                  const profit = revenue - costToUse
+                  const estCost = calculateOrderCost(order);
+                  const hasActualCost =
+                    order.actual_cost !== null &&
+                    order.actual_cost !== undefined;
+                  const actualCostNum = hasActualCost
+                    ? Number(order.actual_cost)
+                    : 0;
+                  const costToUse = hasActualCost ? actualCostNum : estCost;
+                  const revenue = calculateOrderRevenue(order);
+                  const profit = revenue - costToUse;
 
                   return (
-                    <tr key={order.id} className="hover:bg-zinc-900/20 transition-colors">
+                    <tr
+                      key={order.id}
+                      className="hover:bg-zinc-900/20 transition-colors"
+                    >
                       <td className="py-5 px-6">
-                        {order.status === 'Paid' ? (
+                        {order.status === "Paid" ? (
                           <span className="font-bold text-zinc-400 block cursor-default">
                             {order.client_name}
                           </span>
                         ) : (
-                          <Link href={`/orders/${order.id}`} className="font-bold text-zinc-100 hover:text-amber-400 transition-colors block">
+                          <Link
+                            href={`/orders/${order.id}`}
+                            className="font-bold text-zinc-100 hover:text-amber-400 transition-colors block"
+                          >
                             {order.client_name}
                           </Link>
                         )}
@@ -309,24 +341,29 @@ export default function OrdersPage() {
                       <td className="py-5 px-6">
                         <span className="flex items-center gap-1.5 text-zinc-300 justify-start">
                           <Calendar className="h-4 w-4 text-zinc-500" />
-                          {new Date(order.event_date).toLocaleDateString('he-IL', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          })}
+                          {new Date(order.event_date).toLocaleDateString(
+                            "he-IL",
+                            {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            },
+                          )}
                         </span>
                       </td>
-                      <td className="py-5 px-6 font-semibold text-zinc-300">{order.portions} מנות</td>
+                      <td className="py-5 px-6 font-semibold text-zinc-300">
+                        {order.portions} מנות
+                      </td>
                       <td className="py-5 px-6">
                         <span
                           className={`inline-block px-2.5 py-1 rounded-full text-xxs font-extrabold uppercase tracking-wide border ${
-                            order.status === 'Completed'
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                              : order.status === 'Paid'
-                              ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                              : order.status === 'Confirmed'
-                              ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                              : 'bg-zinc-900/50 text-zinc-400 border-zinc-800'
+                            order.status === "Completed"
+                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                              : order.status === "Paid"
+                                ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                                : order.status === "Confirmed"
+                                  ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                                  : "bg-zinc-900/50 text-zinc-400 border-zinc-800"
                           }`}
                         >
                           {getStatusLabel(order.status)}
@@ -338,29 +375,44 @@ export default function OrdersPage() {
                       <td className="py-5 px-6">
                         {hasActualCost ? (
                           <div className="space-y-1 text-right justify-start">
-                            <span className="font-bold text-rose-400 font-mono block">₪{actualCostNum.toFixed(2)}</span>
+                            <span className="font-bold text-rose-400 font-mono block">
+                              ₪{actualCostNum.toFixed(2)}
+                            </span>
                             {(() => {
-                              const diff = estCost - actualCostNum
-                              const isSaving = diff >= 0
+                              const diff = estCost - actualCostNum;
+                              const isSaving = diff >= 0;
                               return (
-                                <span className={`text-[10px] font-extrabold block ${isSaving ? 'text-emerald-455 text-emerald-400' : 'text-rose-400'}`}>
-                                  {isSaving ? 'חיסכון:' : 'חריגה:'} ₪{Math.abs(diff).toFixed(0)}
+                                <span
+                                  className={`text-[10px] font-extrabold block ${isSaving ? "text-emerald-455 text-emerald-400" : "text-rose-400"}`}
+                                >
+                                  {isSaving ? "חיסכון:" : "חריגה:"} ₪
+                                  {Math.abs(diff).toFixed(0)}
                                 </span>
-                              )
+                              );
                             })()}
                           </div>
                         ) : (
                           <div className="space-y-0.5 text-right justify-start">
-                            <span className="font-semibold text-zinc-450 text-zinc-400 font-mono block">₪{estCost.toFixed(2)}</span>
-                            <span className="text-[10px] text-zinc-550 text-zinc-500 font-semibold block">(משוער)</span>
+                            <span className="font-semibold text-zinc-450 text-zinc-400 font-mono block">
+                              ₪{estCost.toFixed(2)}
+                            </span>
+                            <span className="text-[10px] text-zinc-550 text-zinc-500 font-semibold block">
+                              (משוער)
+                            </span>
                           </div>
                         )}
                       </td>
-                      <td className={`py-5 px-6 font-black ${profit >= 0 ? 'text-amber-500' : 'text-red-500'}`}>
+                      <td
+                        className={`py-5 px-6 font-black ${profit >= 0 ? "text-amber-500" : "text-red-500"}`}
+                      >
                         <div className="space-y-0.5">
-                          <span className="font-mono">₪{profit.toFixed(2)}</span>
+                          <span className="font-mono">
+                            ₪{profit.toFixed(2)}
+                          </span>
                           {hasActualCost && (
-                            <span className="text-[10px] text-zinc-500 font-bold block">(עלות בפועל)</span>
+                            <span className="text-[10px] text-zinc-500 font-bold block">
+                              (רווח בפועל)
+                            </span>
                           )}
                         </div>
                       </td>
@@ -372,7 +424,7 @@ export default function OrdersPage() {
                         >
                           <Printer className="h-4 w-4" />
                         </Link>
-                        {order.status !== 'Paid' && (
+                        {order.status !== "Paid" && (
                           <Link
                             href={`/orders/${order.id}`}
                             className="inline-flex p-2 bg-zinc-900 hover:bg-amber-500/10 text-zinc-400 hover:text-amber-400 rounded-lg transition-all"
@@ -390,7 +442,7 @@ export default function OrdersPage() {
                         </button>
                       </td>
                     </tr>
-                  )
+                  );
                 })}
               </tbody>
             </table>
@@ -398,5 +450,5 @@ export default function OrdersPage() {
         )}
       </div>
     </div>
-  )
+  );
 }

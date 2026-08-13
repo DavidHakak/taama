@@ -17,6 +17,9 @@ import {
   Beef,
   PlusCircle,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  ChefHat,
   Check,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -43,6 +46,7 @@ interface OrderBuilderProps {
 
 interface SelectedDishItem {
   dishId: string
+  isPrepared?: boolean
 }
 
 const CATEGORIES = ["סלטים", "ראשונות", "עיקריות", "תוספות", "קינוחים"]
@@ -64,6 +68,19 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
   const [portions, setPortions] = useState<number>(10)
   const [selectedDishes, setSelectedDishes] = useState<SelectedDishItem[]>([])
   const [saving, setSaving] = useState(false)
+
+  // מצב פתיחה/כיווץ של מקטעי העמוד (כדי לקצר עמוד ארוך)
+  const [openSections, setOpenSections] = useState({
+    prep: true,
+    details: true,
+    pricing: !orderId, // בהזמנה חדשה פתוח לתמחור, בעריכה קיימת מכווץ כברירת מחדל
+    dishes: true,
+  })
+  const toggleSection = (key: keyof typeof openSections) =>
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }))
+
+  // דיש שכרגע נשמר עבורו סטטוס הכנה (לחיווי טעינה)
+  const [prepSavingDishId, setPrepSavingDishId] = useState<string | null>(null)
 
   // Quote States
   const [quoteBasePrice, setQuoteBasePrice] = useState<number>(85)
@@ -153,7 +170,8 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
               quote_delivery_price,
               actual_cost,
               order_dishes (
-                dish_id
+                dish_id,
+                is_prepared
               )
             `)
             .eq('id', orderId)
@@ -175,9 +193,9 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
           setQuoteDeliveryPrice(Number(orderData.quote_delivery_price || 0))
           setActualCost(orderData.actual_cost !== null && orderData.actual_cost !== undefined ? Number(orderData.actual_cost) : '')
 
-          const mappedDishes = orderData.order_dishes?.map((od: any) => od.dish_id) || []
-          setSelectedDishes(mappedDishes.map((id: string) => ({ dishId: id })))
-          setSummarySelectedDishes(mappedDishes)
+          const odRows = orderData.order_dishes || []
+          setSelectedDishes(odRows.map((od: any) => ({ dishId: od.dish_id, isPrepared: !!od.is_prepared })))
+          setSummarySelectedDishes(odRows.map((od: any) => od.dish_id))
         } else {
           // New order defaults: add an empty item
           setSelectedDishes([{ dishId: '' }])
@@ -235,7 +253,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
 
   // Add a dish row
   const addDishRow = () => {
-    setSelectedDishes([...selectedDishes, { dishId: '' }])
+    setSelectedDishes([...selectedDishes, { dishId: '', isPrepared: false }])
   }
 
   // Remove a dish row
@@ -248,8 +266,40 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
   // Update selected dish item
   const updateDishRow = (index: number, field: keyof SelectedDishItem, value: string | number) => {
     const newDishes = [...selectedDishes]
-    newDishes[index].dishId = value as string
+    // החלפת המנה מאפסת את סטטוס ההכנה (מנה חדשה טרם הוכנה)
+    newDishes[index] = { ...newDishes[index], dishId: value as string, isPrepared: false }
     setSelectedDishes(newDishes)
+  }
+
+  // סימון/ביטול הכנה של מנה בודדת — נשמר מיידית למסד הנתונים
+  const togglePrepared = async (dishId: string, next: boolean) => {
+    // עדכון אופטימי מקומי
+    setSelectedDishes((prev) =>
+      prev.map((sd) => (sd.dishId === dishId ? { ...sd, isPrepared: next } : sd))
+    )
+
+    if (!orderId) return // בהזמנה חדשה שטרם נשמרה אין שורה במסד לעדכן
+
+    try {
+      setPrepSavingDishId(dishId)
+      const { error: prepError } = await supabase
+        .from('order_dishes')
+        .update({ is_prepared: next })
+        .eq('order_id', orderId)
+        .eq('dish_id', dishId)
+
+      if (prepError) throw prepError
+      router.refresh()
+    } catch (err: unknown) {
+      // שחזור המצב הקודם במקרה של כשל
+      setSelectedDishes((prev) =>
+        prev.map((sd) => (sd.dishId === dishId ? { ...sd, isPrepared: !next } : sd))
+      )
+      console.error('Error updating prep status:', err)
+      setError('שגיאה בעדכון סטטוס ההכנה. נסה שוב.')
+    } finally {
+      setPrepSavingDishId(null)
+    }
   }
 
   // Validation Helper
@@ -371,10 +421,11 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
         finalOrderId = insertedOrder.id
       }
 
-      // Map dish rows to database insert
+      // Map dish rows to database insert (preserving personal prep status)
       const mappedOrderDishes = validDishes.map((sd) => ({
         order_id: finalOrderId!,
         dish_id: sd.dishId,
+        is_prepared: sd.isPrepared ?? false,
       }))
 
       const { error: insertDishesError } = await supabase
@@ -456,10 +507,11 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
         finalOrderId = insertedOrder.id
       }
 
-      // Map dish rows to database insert
+      // Map dish rows to database insert (preserving personal prep status)
       const mappedOrderDishes = validDishes.map((sd) => ({
         order_id: finalOrderId!,
         dish_id: sd.dishId,
+        is_prepared: sd.isPrepared ?? false,
       }))
 
       const { error: insertDishesError } = await supabase
@@ -547,9 +599,133 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
         {/* Left Form: Details & Dish mapping */}
         <form onSubmit={handleSubmit} className="lg:col-span-2 space-y-6 text-right">
 
+          {/* Section 0: Preparation Tracking (personal) — hidden once completed/paid */}
+          {orderId && status !== 'Completed' && status !== 'Paid' && (() => {
+            const prepDishes = selectedDishes
+              .filter((sd) => sd.dishId)
+              .map((sd) => ({ ...sd, dish: dishesList.find((d) => d.id === sd.dishId) }))
+              .filter((x) => x.dish) as (SelectedDishItem & { dish: Dish })[]
+
+            const totalPrep = prepDishes.length
+            const donePrep = prepDishes.filter((x) => x.isPrepared).length
+            const pct = totalPrep > 0 ? Math.round((donePrep / totalPrep) * 100) : 0
+
+            const grouped = CATEGORIES
+              .map((cat) => ({ cat, items: prepDishes.filter((x) => x.dish.category === cat) }))
+              .filter((g) => g.items.length > 0)
+            const otherItems = prepDishes.filter((x) => !CATEGORIES.includes(x.dish.category))
+            if (otherItems.length > 0) grouped.push({ cat: 'אחר', items: otherItems })
+
+            return (
+              <div className="bg-zinc-950 border border-amber-500/20 rounded-2xl shadow-xl overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggleSection('prep')}
+                  className="w-full flex items-center justify-between gap-3 p-6 text-right cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <ChefHat className="h-5 w-5 text-amber-500 shrink-0" />
+                    <div>
+                      <h2 className="text-sm font-bold uppercase tracking-wider text-amber-400">מעקב הכנה</h2>
+                      <p className="text-xxs text-zinc-500 mt-0.5">סמן אילו מנות כבר הוכנו ומה עוד נשאר</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-xs font-black font-mono text-zinc-200">{donePrep}/{totalPrep} מוכן</span>
+                    {openSections.prep ? <ChevronUp className="h-4 w-4 text-zinc-500" /> : <ChevronDown className="h-4 w-4 text-zinc-500" />}
+                  </div>
+                </button>
+
+                {openSections.prep && (
+                  <div className="px-6 pb-6 space-y-5">
+                    {totalPrep === 0 ? (
+                      <p className="text-zinc-600 text-xs py-2 text-center">טרם נבחרו מנות להזמנה זו. הוסף מנות ושמור כדי לעקוב אחר ההכנה.</p>
+                    ) : (
+                      <>
+                        {/* Overall progress */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between text-xxs font-bold">
+                            <span className="text-zinc-400">התקדמות כללית</span>
+                            <span className="font-mono text-zinc-200">{pct}%</span>
+                          </div>
+                          <div className="w-full bg-zinc-900 h-2 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-300 ${pct === 100 ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Grouped by category */}
+                        <div className="space-y-4">
+                          {grouped.map((g) => {
+                            const catDone = g.items.filter((x) => x.isPrepared).length
+                            return (
+                              <div key={g.cat} className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <h3 className="text-xxs font-extrabold uppercase tracking-wider text-zinc-500">{g.cat}</h3>
+                                  <span className="text-[10px] font-mono text-zinc-500">{catDone}/{g.items.length}</span>
+                                </div>
+                                <div className="space-y-1.5">
+                                  {g.items.map((x) => {
+                                    const isSavingThis = prepSavingDishId === x.dishId
+                                    return (
+                                      <button
+                                        key={x.dishId}
+                                        type="button"
+                                        disabled={saving || prepSavingDishId !== null}
+                                        onClick={() => togglePrepared(x.dishId, !x.isPrepared)}
+                                        className={`w-full flex items-center gap-3 p-3 rounded-xl border text-right transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
+                                          x.isPrepared
+                                            ? 'bg-emerald-500/5 border-emerald-500/20 hover:bg-emerald-500/10'
+                                            : 'bg-zinc-900/30 border-zinc-800/50 hover:bg-zinc-900/50'
+                                        }`}
+                                      >
+                                        <span
+                                          className={`h-5 w-5 shrink-0 rounded-md border flex items-center justify-center transition-all ${
+                                            x.isPrepared ? 'bg-emerald-500 border-emerald-500' : 'bg-black border-zinc-700'
+                                          }`}
+                                        >
+                                          {isSavingThis ? (
+                                            <Loader2 className="h-3 w-3 animate-spin text-white" />
+                                          ) : (
+                                            x.isPrepared && <Check className="h-3.5 w-3.5 text-white" />
+                                          )}
+                                        </span>
+                                        <span className={`text-sm font-bold flex-1 ${x.isPrepared ? 'text-emerald-300 line-through decoration-emerald-500/40' : 'text-zinc-200'}`}>
+                                          {x.dish.name}
+                                        </span>
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ${x.isPrepared ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-500 bg-zinc-900'}`}>
+                                          {x.isPrepared ? 'הוכן' : 'נשאר'}
+                                        </span>
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
           {/* Section 1: Order Details */}
-          <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 shadow-xl space-y-5">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-amber-400">פרטי האירוע</h2>
+          <div className="bg-zinc-950 border border-zinc-900 rounded-2xl shadow-xl overflow-hidden">
+            <button
+              type="button"
+              onClick={() => toggleSection('details')}
+              className="w-full flex items-center justify-between p-6 text-right cursor-pointer"
+            >
+              <h2 className="text-sm font-bold uppercase tracking-wider text-amber-400">פרטי האירוע</h2>
+              {openSections.details ? <ChevronUp className="h-4 w-4 text-zinc-500" /> : <ChevronDown className="h-4 w-4 text-zinc-500" />}
+            </button>
+            {openSections.details && (
+            <div className="px-6 pb-6 space-y-5">
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="md:col-span-2">
@@ -635,11 +811,22 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                 })}
               </div>
             </div>
+            </div>
+            )}
           </div>
 
           {/* Section 3: Pricing & Revenue */}
-          <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 shadow-xl space-y-5">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-amber-400">תמחור והכנסות מהאירוע</h2>
+          <div className="bg-zinc-950 border border-zinc-900 rounded-2xl shadow-xl overflow-hidden">
+            <button
+              type="button"
+              onClick={() => toggleSection('pricing')}
+              className="w-full flex items-center justify-between p-6 text-right cursor-pointer"
+            >
+              <h2 className="text-sm font-bold uppercase tracking-wider text-amber-400">תמחור והכנסות מהאירוע</h2>
+              {openSections.pricing ? <ChevronUp className="h-4 w-4 text-zinc-500" /> : <ChevronDown className="h-4 w-4 text-zinc-500" />}
+            </button>
+            {openSections.pricing && (
+            <div className="px-6 pb-6 space-y-5">
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               <div>
@@ -785,13 +972,22 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                 </div>
               </div>
             )}
+            </div>
+            )}
           </div>
 
           {/* Section 2: Dish Selector */}
-          <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 shadow-xl space-y-5">
-            <div className="flex items-center justify-between">
+          <div className="bg-zinc-950 border border-zinc-900 rounded-2xl shadow-xl overflow-hidden">
+            <button
+              type="button"
+              onClick={() => toggleSection('dishes')}
+              className="w-full flex items-center justify-between p-6 text-right cursor-pointer"
+            >
               <h2 className="text-sm font-bold uppercase tracking-wider text-amber-400">שיוך מנות וכמות מנות מתוכננת</h2>
-            </div>
+              {openSections.dishes ? <ChevronUp className="h-4 w-4 text-zinc-500" /> : <ChevronDown className="h-4 w-4 text-zinc-500" />}
+            </button>
+            {openSections.dishes && (
+            <div className="px-6 pb-6 space-y-5">
 
             <div className="space-y-3">
               {(() => {
@@ -942,6 +1138,8 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                   הוסף שורת מנה
                 </button>
               </div>
+            )}
+            </div>
             )}
           </div>
 

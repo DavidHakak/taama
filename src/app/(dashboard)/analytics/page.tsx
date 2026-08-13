@@ -217,6 +217,69 @@ export default async function AnalyticsPage() {
     }
   })
 
+  // --- רווח ממוצע לפי כמות מנות מדויקת (אוטומטי מתוך ההזמנות הקיימות) ---
+  type PortionGroup = {
+    portions: number
+    count: number
+    revenueSum: number
+    estimatedSum: number
+    actualSum: number
+    actualCount: number
+    savingsSum: number
+    profitSum: number
+  }
+  const portionGroupsMap: { [portions: number]: PortionGroup } = {}
+
+  activeCateringOrders.forEach((o) => {
+    const p = Number(o.portions || 0)
+    if (p <= 0) return
+
+    // הכנסה ללא משלוחים כלל (המשלוח הוא תשלום מעבר ולא רווח)
+    const revenue = calculateCateringRevenue(o) - Number(o.quoteDeliveryPrice || 0)
+    const estCost = getOrderEstimatedCost(o.id, o.portions)
+    const hasAct = o.actualCost !== null && o.actualCost !== undefined
+    const actCost = hasAct ? Number(o.actualCost) : null
+    const costToUse = hasAct ? (actCost as number) : estCost // רווח לפי בפועל אם הוזן, אחרת לפי צפי
+    const profit = revenue - costToUse
+
+    if (!portionGroupsMap[p]) {
+      portionGroupsMap[p] = {
+        portions: p,
+        count: 0,
+        revenueSum: 0,
+        estimatedSum: 0,
+        actualSum: 0,
+        actualCount: 0,
+        savingsSum: 0,
+        profitSum: 0,
+      }
+    }
+    const g = portionGroupsMap[p]
+    g.count += 1
+    g.revenueSum += revenue
+    g.estimatedSum += estCost
+    g.profitSum += profit
+    if (hasAct) {
+      g.actualSum += actCost as number
+      g.actualCount += 1
+      g.savingsSum += estCost - (actCost as number)
+    }
+  })
+
+  const portionProfitGroups = Object.values(portionGroupsMap)
+    .map((g) => ({
+      portions: g.portions,
+      count: g.count,
+      avgRevenue: g.revenueSum / g.count,
+      avgEstimated: g.estimatedSum / g.count,
+      avgActual: g.actualCount > 0 ? g.actualSum / g.actualCount : null,
+      avgSavings: g.actualCount > 0 ? g.savingsSum / g.actualCount : null,
+      avgProfit: g.profitSum / g.count,
+      avgMargin: g.revenueSum > 0 ? (g.profitSum / g.revenueSum) * 100 : 0,
+      actualCount: g.actualCount,
+    }))
+    .sort((a, b) => a.portions - b.portions)
+
   // Combined Stats
   const combinedTotalRevenue = totalShopRevenue + totalCateringRevenue
   const totalOrdersCount = activeShopOrders.length + activeCateringOrders.length
@@ -234,7 +297,7 @@ export default async function AnalyticsPage() {
 
   // Calculate monthly stats for the last 6 months for Shop vs Catering
   const getCombinedMonthlyData = () => {
-    const monthlyMap: { [key: string]: { month: string; shopRev: number; cateringRev: number; count: number } } = {}
+    const monthlyMap: { [key: string]: { month: string; shopRev: number; cateringRev: number; cateringRevNet: number; cateringCost: number; count: number } } = {}
 
     const last6Months: string[] = []
     for (let i = 5; i >= 0; i--) {
@@ -249,6 +312,8 @@ export default async function AnalyticsPage() {
         month: key,
         shopRev: 0,
         cateringRev: 0,
+        cateringRevNet: 0,
+        cateringCost: 0,
         count: 0
       }
     }
@@ -275,6 +340,11 @@ export default async function AnalyticsPage() {
 
       if (monthlyMap[key]) {
         monthlyMap[key].cateringRev += calculateCateringRevenue(o)
+        // הכנסה נטו ללא משלוחים — לחישוב הרווחיות
+        monthlyMap[key].cateringRevNet += calculateCateringRevenue(o) - Number(o.quoteDeliveryPrice || 0)
+        const estCost = getOrderEstimatedCost(o.id, o.portions)
+        const hasAct = o.actualCost !== null && o.actualCost !== undefined
+        monthlyMap[key].cateringCost += hasAct ? Number(o.actualCost) : estCost
         monthlyMap[key].count += 1
       }
     })
@@ -283,11 +353,20 @@ export default async function AnalyticsPage() {
       const dateObj = new Date(key + '-01')
       const monthName = dateObj.toLocaleDateString('he-IL', { month: 'short' })
       const yearShort = dateObj.toLocaleDateString('he-IL', { year: '2-digit' })
+      const cateringRev = monthlyMap[key].cateringRev
+      const cateringRevNet = monthlyMap[key].cateringRevNet
+      const cateringCost = monthlyMap[key].cateringCost
+      const cateringProfit = cateringRevNet - cateringCost // רווח לפי הכנסה ללא משלוח
+      const margin = cateringRevNet > 0 ? (cateringProfit / cateringRevNet) * 100 : 0
       return {
         key,
         label: `${monthName} ${yearShort}`,
         shopRev: monthlyMap[key].shopRev,
-        cateringRev: monthlyMap[key].cateringRev,
+        cateringRev,
+        cateringRevNet,
+        cateringCost,
+        cateringProfit,
+        margin,
         totalRev: monthlyMap[key].shopRev + monthlyMap[key].cateringRev,
         count: monthlyMap[key].count
       }
@@ -296,6 +375,13 @@ export default async function AnalyticsPage() {
 
   const monthlyData = getCombinedMonthlyData()
   const maxMonthlyRevenue = Math.max(...monthlyData.map(d => d.totalRev), 1000)
+
+  // רווחיות חודשית (אחוז רווח גולמי בקייטרינג)
+  const maxMargin = Math.max(...monthlyData.map(d => d.margin), 30)
+  const monthsWithCatering = monthlyData.filter(d => d.cateringRev > 0)
+  const sixMonthCateringRevNet = monthsWithCatering.reduce((s, d) => s + d.cateringRevNet, 0)
+  const sixMonthCateringProfit = monthsWithCatering.reduce((s, d) => s + d.cateringProfit, 0)
+  const avgSixMonthMargin = sixMonthCateringRevNet > 0 ? (sixMonthCateringProfit / sixMonthCateringRevNet) * 100 : 0
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('he-IL', { style: 'currency', currency: 'ILS', maximumFractionDigits: 0 }).format(val)
@@ -546,6 +632,111 @@ export default async function AnalyticsPage() {
         </div>
       </div>
 
+      {/* Monthly Profitability (Gross margin %) chart */}
+      <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 shadow-xl space-y-6 text-right">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <Percent className="h-5 w-5 text-amber-500" />
+              רווחיות חודשית — אחוז רווח גולמי בקייטרינג
+            </h2>
+            <p className="text-xs text-zinc-400 mt-1">אחוז הרווח הגולמי (רווח חלקי הכנסה) מאירועי הקייטרינג בכל חודש, לאורך חצי השנה האחרונה.</p>
+          </div>
+          <div className="text-left shrink-0">
+            <span className="block text-[10px] text-zinc-500 font-bold uppercase tracking-wider">ממוצע 6 חודשים</span>
+            <span className={`text-2xl font-black font-mono ${avgSixMonthMargin >= 70 ? 'text-emerald-400' : avgSixMonthMargin >= 60 ? 'text-amber-400' : 'text-rose-400'}`}>
+              {avgSixMonthMargin.toFixed(1)}%
+            </span>
+          </div>
+        </div>
+
+        {monthsWithCatering.length === 0 ? (
+          <p className="text-zinc-500 text-xs italic py-10 text-center">אין עדיין אירועי קייטרינג פעילים בחצי השנה האחרונה לחישוב רווחיות.</p>
+        ) : (
+          <div className="w-full overflow-x-auto">
+            <div className="min-w-[600px] h-[240px] flex items-center justify-center">
+              <svg viewBox="0 0 600 220" className="w-full h-full font-sans select-none">
+                {/* Grid lines */}
+                <line x1="10" y1="160" x2="590" y2="160" stroke="#27272a" strokeWidth="1.5" />
+                <line x1="10" y1="113" x2="590" y2="113" stroke="#18181b" strokeWidth="1" strokeDasharray="4 4" />
+                <line x1="10" y1="66" x2="590" y2="66" stroke="#18181b" strokeWidth="1" strokeDasharray="4 4" />
+                <line x1="10" y1="20" x2="590" y2="20" stroke="#18181b" strokeWidth="1" strokeDasharray="4 4" />
+
+                {monthlyData.map((data, index) => {
+                  const hasData = data.cateringRev > 0
+                  const barHeight = hasData && maxMargin > 0 ? (Math.max(data.margin, 0) / maxMargin) * 140 : 0
+                  const drawnHeight = hasData && data.margin > 0 ? Math.max(barHeight, 3) : 0
+                  const xBase = index * 100
+                  const barX = xBase + 38
+                  const barWidth = 24
+                  const barY = 160 - drawnHeight
+
+                  const colorClass = !hasData
+                    ? 'fill-zinc-800'
+                    : data.margin >= 70
+                    ? 'fill-emerald-500/80 group-hover:fill-emerald-500'
+                    : data.margin >= 60
+                    ? 'fill-amber-500/80 group-hover:fill-amber-500'
+                    : 'fill-rose-500/80 group-hover:fill-rose-500'
+
+                  const labelColor = !hasData
+                    ? 'fill-zinc-600'
+                    : data.margin >= 70
+                    ? 'fill-emerald-400'
+                    : data.margin >= 60
+                    ? 'fill-amber-400'
+                    : 'fill-rose-400'
+
+                  return (
+                    <g key={data.key} className="group">
+                      <rect x={xBase + 10} y="5" width="80" height="175" className="fill-transparent group-hover:fill-white/[0.015] transition-colors duration-150" rx="8" />
+
+                      {hasData && drawnHeight > 0 && (
+                        <rect
+                          x={barX}
+                          y={barY}
+                          width={barWidth}
+                          height={drawnHeight}
+                          className={`${colorClass} transition-all duration-300 cursor-pointer`}
+                          rx="2"
+                        />
+                      )}
+
+                      {/* Percentage label */}
+                      <text
+                        x={barX + barWidth / 2}
+                        y={hasData ? barY - 8 : 150}
+                        textAnchor="middle"
+                        className={`text-[11px] font-black ${labelColor} font-mono`}
+                      >
+                        {hasData ? `${data.margin.toFixed(0)}%` : '—'}
+                      </text>
+
+                      {/* Month label */}
+                      <text x={xBase + 50} y="185" textAnchor="middle" className="text-xs font-semibold fill-zinc-400 group-hover:fill-white transition-colors duration-150">
+                        {data.label}
+                      </text>
+
+                      {/* Profit value */}
+                      <text x={xBase + 50} y="202" textAnchor="middle" className="text-[9px] font-bold fill-zinc-650 group-hover:fill-zinc-450 transition-colors duration-150 font-mono">
+                        {hasData ? `רווח ${formatCurrency(data.cateringProfit)}` : `${data.count} הזמנות`}
+                      </text>
+                    </g>
+                  )
+                })}
+              </svg>
+            </div>
+          </div>
+        )}
+
+        {/* Legend */}
+        <div className="flex flex-wrap gap-4 text-xxs font-extrabold justify-start border-t border-zinc-900/60 pt-4">
+          <div className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-emerald-500" /><span className="text-zinc-300">מעולה (70%+)</span></div>
+          <div className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-amber-500" /><span className="text-zinc-300">בינוני (60%–70%)</span></div>
+          <div className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-rose-500" /><span className="text-zinc-300">הפסד (מתחת ל-60%)</span></div>
+        </div>
+      </div>
+
       {/* Catering Cost Efficiency Section */}
       <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 shadow-xl space-y-6 text-right">
         <div>
@@ -673,6 +864,78 @@ export default async function AnalyticsPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Average Profit by exact portion count */}
+      <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 shadow-xl space-y-6 text-right">
+        <div>
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-amber-500" />
+            רווח ממוצע לפי גודל הזמנה (כמות מנות)
+          </h2>
+          <p className="text-xs text-zinc-400 mt-1">
+            ניתוח אוטומטי לכל כמות מנות: הכנסה ממוצעת, צפי הוצאות מול הוצאה בפועל, החיסכון שהושג והרווח הגולמי הממוצע — מבוסס על {activeCateringOrders.length} אירועים פעילים.
+          </p>
+        </div>
+
+        {portionProfitGroups.length === 0 ? (
+          <p className="text-zinc-500 text-xs italic py-6 text-center">אין עדיין אירועים פעילים (מאושר / הושלם / שולם) לחישוב.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-right border-collapse min-w-[720px]">
+              <thead>
+                <tr className="border-b border-zinc-900 bg-zinc-950/20 text-zinc-400 text-[10px] font-extrabold uppercase tracking-wider">
+                  <th className="py-3 px-4">כמות מנות</th>
+                  <th className="py-3 px-4">הזמנות</th>
+                  <th className="py-3 px-4">הכנסה ממוצעת</th>
+                  <th className="py-3 px-4">צפי הוצאות ממוצע</th>
+                  <th className="py-3 px-4">הוצאה בפועל ממוצעת</th>
+                  <th className="py-3 px-4">חיסכון ממוצע</th>
+                  <th className="py-3 px-4">רווח ממוצע</th>
+                  <th className="py-3 px-4">% רווח</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-900 text-zinc-300 text-xs">
+                {portionProfitGroups.map((g) => (
+                  <tr key={g.portions} className="hover:bg-zinc-900/20 transition-colors">
+                    <td className="py-3 px-4 font-black text-zinc-100">
+                      {g.portions} <span className="text-[10px] font-bold text-zinc-500">מנות</span>
+                    </td>
+                    <td className="py-3 px-4 font-mono text-zinc-300">{g.count}</td>
+                    <td className="py-3 px-4 font-mono text-emerald-400 font-bold">{formatCurrency(g.avgRevenue)}</td>
+                    <td className="py-3 px-4 font-mono text-zinc-400">{formatCurrency(g.avgEstimated)}</td>
+                    <td className="py-3 px-4 font-mono">
+                      {g.avgActual !== null ? (
+                        <span className="text-zinc-200 font-bold">{formatCurrency(g.avgActual)}</span>
+                      ) : (
+                        <span className="text-zinc-600 italic">לא עודכן</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 font-mono">
+                      {g.avgSavings !== null ? (
+                        <span className={`font-bold ${g.avgSavings >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {g.avgSavings >= 0 ? 'חיסכון ' : 'חריגה '}{formatCurrency(Math.abs(g.avgSavings))}
+                        </span>
+                      ) : (
+                        <span className="text-zinc-600">—</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 font-mono font-black text-amber-500">{formatCurrency(g.avgProfit)}</td>
+                    <td className="py-3 px-4 font-mono">
+                      <span className={`font-bold ${g.avgMargin >= 70 ? 'text-emerald-400' : g.avgMargin >= 60 ? 'text-amber-400' : 'text-rose-400'}`}>
+                        {g.avgMargin.toFixed(1)}%
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <p className="text-[10px] text-zinc-600 leading-relaxed">
+          * הכנסה ורווח מחושבים מכלל האירועים הפעילים בכל כמות מנות. &quot;צפי הוצאות&quot; מבוסס על עלות חומרי הגלם לפי המתכונים, ואילו &quot;הוצאה בפועל&quot; והחיסכון מחושבים רק עבור אירועים שבהם הוזנה עלות בפועל. הרווח הגולמי משתמש בעלות בפועל כשקיימת, אחרת בצפי ההוצאות.
+        </p>
       </div>
 
       {/* Best Sellers Grid */}

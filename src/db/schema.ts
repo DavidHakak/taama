@@ -53,6 +53,8 @@ export const orderDishes = pgTable('order_dishes', {
   dish_id: uuid('dish_id')
     .references(() => dishes.id, { onDelete: 'cascade' })
     .notNull(),
+  // מעקב הכנה אישי: האם המנה כבר הוכנה עבור האירוע
+  is_prepared: boolean('is_prepared').notNull().default(false),
 })
 
 export const profiles = pgTable('profiles', {

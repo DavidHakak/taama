@@ -180,6 +180,15 @@ export default function DashboardPage() {
     
     orders.forEach((order) => {
       if (!order.order_dishes) return
+
+      // Each course is served as several options that split the guests between them:
+      // an order of 50 with 2 starter options means each starter dish only serves 25.
+      // Match the print/cost logic and divide the event's portions by the number of
+      // options in that course (starters and mains) instead of crediting the full count.
+      const startersCount = order.order_dishes.filter((od) => od.dishes?.category === 'ראשונות').length
+      const mainsCount = order.order_dishes.filter((od) => od.dishes?.category === 'עיקריות').length
+      const orderPortions = order.portions || 10
+
       order.order_dishes.forEach((od) => {
         if (!od.dishes) return
         const dishId = od.dishes.id
@@ -190,10 +199,17 @@ export default function DashboardPage() {
         if (type === 'mains' && !isMainOrStarter) return
         if (type === 'others' && isMainOrStarter) return
 
+        let dishPortions = orderPortions
+        if (dishCategory === 'ראשונות' && startersCount > 0) {
+          dishPortions = orderPortions / startersCount
+        } else if (dishCategory === 'עיקריות' && mainsCount > 0) {
+          dishPortions = orderPortions / mainsCount
+        }
+
         if (!dishPortionsMap[dishId]) {
           dishPortionsMap[dishId] = { name: dishName, category: dishCategory, portions: 0, eventCount: 0 }
         }
-        dishPortionsMap[dishId].portions += (order.portions || 10)
+        dishPortionsMap[dishId].portions += Math.round(dishPortions)
         dishPortionsMap[dishId].eventCount += 1
       })
     })

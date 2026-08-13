@@ -69,6 +69,29 @@ export default function DashboardLayout({
     })
   }
 
+  // מיפוי הנתיב הנוכחי לקבוצת התפריט אליה הוא שייך
+  const sectionForPath = (path: string): string | null => {
+    if (['/ingredients', '/dishes', '/orders'].some((p) => path.startsWith(p))) return 'catering'
+    if (path.startsWith('/shop-admin')) return 'shabbat'
+    if (path.startsWith('/shopping-list')) return 'procurement'
+    if (['/users', '/tasks', '/broadcast', '/analytics'].some((p) => path.startsWith(p))) return 'management'
+    return null
+  }
+
+  // פתיחה אוטומטית של הקבוצה שאליה שייך הדף הנוכחי, כדי שיהיה ברור היכן נמצאים
+  useEffect(() => {
+    const key = sectionForPath(pathname)
+    if (key) {
+      setOpenAccordions({
+        catering: false,
+        shabbat: false,
+        procurement: false,
+        management: false,
+        [key]: true,
+      })
+    }
+  }, [pathname])
+
   useEffect(() => {
     const getSession = async () => {
       const {
@@ -145,9 +168,9 @@ export default function DashboardLayout({
   }
 
   const cateringItems = [
-    { name: 'רכיבים ומלאי', href: '/ingredients', icon: Beef },
-    { name: 'מנות ומתכונים', href: '/dishes', icon: UtensilsCrossed },
     { name: 'הזמנות ואירועים', href: '/orders', icon: ClipboardList },
+    { name: 'מנות ומתכונים', href: '/dishes', icon: UtensilsCrossed },
+    { name: 'רכיבים ומלאי', href: '/ingredients', icon: Beef },
   ]
 
   const shabbatItems = [
@@ -250,9 +273,9 @@ export default function DashboardLayout({
           </Link>
 
           {/* Accordion sections */}
-          {renderAccordionSection('catering', 'קייטרינג כללי', cateringItems, openAccordions.catering, () => toggleAccordion('catering'))}
-          {renderAccordionSection('shabbat', 'ניהול שבת', shabbatItems, openAccordions.shabbat, () => toggleAccordion('shabbat'))}
-          {renderAccordionSection('procurement', 'רכש וקניות', procurementItems, openAccordions.procurement, () => toggleAccordion('procurement'))}
+          {renderAccordionSection('catering', 'קייטרינג', cateringItems, openAccordions.catering, () => toggleAccordion('catering'))}
+          {renderAccordionSection('shabbat', 'חנות שבת', shabbatItems, openAccordions.shabbat, () => toggleAccordion('shabbat'))}
+          {renderAccordionSection('procurement', 'רכש משותף', procurementItems, openAccordions.procurement, () => toggleAccordion('procurement'))}
           {renderAccordionSection('management', 'ניהול ואנליטיקות', managementItems, openAccordions.management, () => toggleAccordion('management'))}
 
           {/* Go to storefront */}
@@ -334,9 +357,9 @@ export default function DashboardLayout({
             </Link>
 
             {/* Accordion sections */}
-            {renderAccordionSection('catering', 'קייטרינג כללי', cateringItems, openAccordions.catering, () => toggleAccordion('catering'), true)}
-            {renderAccordionSection('shabbat', 'ניהול שבת', shabbatItems, openAccordions.shabbat, () => toggleAccordion('shabbat'), true)}
-            {renderAccordionSection('procurement', 'רכש וקניות', procurementItems, openAccordions.procurement, () => toggleAccordion('procurement'), true)}
+            {renderAccordionSection('catering', 'קייטרינג', cateringItems, openAccordions.catering, () => toggleAccordion('catering'), true)}
+            {renderAccordionSection('shabbat', 'חנות שבת', shabbatItems, openAccordions.shabbat, () => toggleAccordion('shabbat'), true)}
+            {renderAccordionSection('procurement', 'רכש משותף', procurementItems, openAccordions.procurement, () => toggleAccordion('procurement'), true)}
             {renderAccordionSection('management', 'ניהול ואנליטיקות', managementItems, openAccordions.management, () => toggleAccordion('management'), true)}
 
             {/* Go to storefront */}
