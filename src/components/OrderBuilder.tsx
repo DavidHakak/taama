@@ -21,6 +21,7 @@ import {
   ChevronUp,
   ChefHat,
   Check,
+  ShoppingCart,
 } from 'lucide-react'
 import Link from 'next/link'
 import { CustomSelect } from '@/components/ui/CustomSelect'
@@ -75,12 +76,17 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
     details: true,
     pricing: !orderId, // בהזמנה חדשה פתוח לתמחור, בעריכה קיימת מכווץ כברירת מחדל
     dishes: true,
+    shopping: true,
   })
   const toggleSection = (key: keyof typeof openSections) =>
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }))
 
   // דיש שכרגע נשמר עבורו סטטוס הכנה (לחיווי טעינה)
   const [prepSavingDishId, setPrepSavingDishId] = useState<string | null>(null)
+
+  // מעקב רכש: מזהי חומרי הגלם שכבר נרכשו עבור האירוע (+ חיווי שמירה לשורה)
+  const [purchasedIngredients, setPurchasedIngredients] = useState<Set<string>>(new Set())
+  const [purchaseSavingId, setPurchaseSavingId] = useState<string | null>(null)
 
   // Quote States
   const [quoteBasePrice, setQuoteBasePrice] = useState<number>(85)
@@ -196,6 +202,21 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
           const odRows = orderData.order_dishes || []
           setSelectedDishes(odRows.map((od: any) => ({ dishId: od.dish_id, isPrepared: !!od.is_prepared })))
           setSummarySelectedDishes(odRows.map((od: any) => od.dish_id))
+
+          // מעקב רכש קיים עבור האירוע
+          const { data: purchaseRows, error: purchaseError } = await supabase
+            .from('order_purchases')
+            .select('ingredient_id, is_purchased')
+            .eq('order_id', orderId)
+
+          if (purchaseError) throw purchaseError
+          setPurchasedIngredients(
+            new Set(
+              (purchaseRows || [])
+                .filter((r) => r.is_purchased)
+                .map((r) => r.ingredient_id as string)
+            )
+          )
         } else {
           // New order defaults: add an empty item
           setSelectedDishes([{ dishId: '' }])
@@ -299,6 +320,49 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
       setError('שגיאה בעדכון סטטוס ההכנה. נסה שוב.')
     } finally {
       setPrepSavingDishId(null)
+    }
+  }
+
+  // סימון/ביטול רכישה של חומר גלם ברשימת הקניות — נשמר מיידית למסד הנתונים
+  const togglePurchased = async (ingredientId: string, next: boolean) => {
+    if (!orderId) return // רשימת הרכש נשמרת רק לאירוע קיים
+
+    // עדכון אופטימי מקומי
+    setPurchasedIngredients((prev) => {
+      const updated = new Set(prev)
+      if (next) updated.add(ingredientId)
+      else updated.delete(ingredientId)
+      return updated
+    })
+
+    try {
+      setPurchaseSavingId(ingredientId)
+      const { error: purchaseError } = await supabase
+        .from('order_purchases')
+        .upsert(
+          {
+            order_id: orderId,
+            ingredient_id: ingredientId,
+            is_purchased: next,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'order_id,ingredient_id' }
+        )
+
+      if (purchaseError) throw purchaseError
+      router.refresh()
+    } catch (err: unknown) {
+      // שחזור המצב הקודם במקרה של כשל
+      setPurchasedIngredients((prev) => {
+        const updated = new Set(prev)
+        if (next) updated.delete(ingredientId)
+        else updated.add(ingredientId)
+        return updated
+      })
+      console.error('Error updating purchase status:', err)
+      setError('שגיאה בעדכון סטטוס הרכישה. נסה שוב.')
+    } finally {
+      setPurchaseSavingId(null)
     }
   }
 
@@ -1270,35 +1334,175 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
             </div>
           </div>
 
-          {/* Live Grocery requirements */}
-          <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 shadow-xl space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2 justify-start">
-              <Beef className="h-4.5 w-4.5 text-amber-500" />
-              ריכוז רשימת קניות ורכש
-            </h3>
-            <p className="text-xxs text-zinc-400">כמויות חומרי גלם מחושבות בזמן אמת עבור האירוע.</p>
+          {/* Live Grocery requirements + purchase tracking */}
+          {(() => {
+            const purchasedCount = aggregatedIngredients.filter((i) =>
+              purchasedIngredients.has(i.ingredientId)
+            ).length
+            const totalCount = aggregatedIngredients.length
+            const remainingCount = totalCount - purchasedCount
+            const purchasedPct = totalCount > 0 ? Math.round((purchasedCount / totalCount) * 100) : 0
+            // סימון רכש נשמר לפי מזהה אירוע, ולכן זמין רק לאחר שמירת האירוע
+            const canTrackPurchases = !!orderId
 
-            <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
-              {aggregatedIngredients.length === 0 ? (
-                <p className="text-zinc-600 text-xs py-4 text-center">טרם נבחרו מנות.</p>
-              ) : (
-                aggregatedIngredients.map((item) => (
-                  <div key={item.ingredientId} className="p-3 bg-zinc-900/20 border border-zinc-900/80 hover:bg-zinc-900/35 hover:border-zinc-800/80 rounded-xl flex items-center justify-between gap-3 text-right transition-all">
-                    <div className="min-w-0 text-right">
-                      <span className="block text-xs font-bold text-zinc-200 truncate">{item.ingredientName}</span>
-                      <span className="text-xxs font-semibold text-zinc-400 uppercase font-mono mt-0.5 inline-block">
-                        {item.totalQuantity.toFixed(2)} {getUnitLabel(item.unit)}
-                      </span>
-                    </div>
-
-                    <div className="text-left shrink-0">
-                      <span className="text-xs font-bold text-amber-500">₪{item.totalCost.toFixed(2)}</span>
+            return (
+              <div className="bg-zinc-950 border border-zinc-900 rounded-2xl shadow-xl overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggleSection('shopping')}
+                  className="w-full flex items-center justify-between gap-3 p-6 text-right cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Beef className="h-4.5 w-4.5 text-amber-500 shrink-0" />
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-white text-right">
+                        ריכוז רשימת קניות ורכש
+                      </h3>
+                      <p className="text-xxs text-zinc-400 mt-0.5 text-right">
+                        {canTrackPurchases
+                          ? 'סמן מה כבר נרכש ומה עוד נשאר להשלים'
+                          : 'כמויות חומרי גלם מחושבות בזמן אמת עבור האירוע'}
+                      </p>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {canTrackPurchases && totalCount > 0 && (
+                      <span className="text-xs font-black font-mono text-zinc-200">
+                        {purchasedCount}/{totalCount} נרכשו
+                      </span>
+                    )}
+                    {openSections.shopping ? (
+                      <ChevronUp className="h-4 w-4 text-zinc-500" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-zinc-500" />
+                    )}
+                  </div>
+                </button>
+
+                {openSections.shopping && (
+                  <div className="px-6 pb-6 space-y-4">
+                    {!canTrackPurchases && (
+                      <p className="text-xxs font-semibold text-zinc-500 bg-zinc-900/40 border border-zinc-900 rounded-xl px-3 py-2.5 flex items-center gap-2">
+                        <ShoppingCart className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                        שמור את האירוע כדי לסמן אילו חומרי גלם כבר נרכשו.
+                      </p>
+                    )}
+
+                    {canTrackPurchases && totalCount > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-xxs font-bold">
+                          <span className="text-zinc-400">
+                            {remainingCount > 0 ? `נותרו ${remainingCount} פריטים לרכישה` : 'הרכש הושלם'}
+                          </span>
+                          <span className="font-mono text-zinc-200">{purchasedPct}%</span>
+                        </div>
+                        <div className="w-full bg-zinc-900 h-2 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              purchasedPct === 100 ? 'bg-emerald-500' : 'bg-amber-500'
+                            }`}
+                            style={{ width: `${purchasedPct}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
+                      {totalCount === 0 ? (
+                        <p className="text-zinc-600 text-xs py-4 text-center">טרם נבחרו מנות.</p>
+                      ) : (
+                        aggregatedIngredients.map((item) => {
+                          const isPurchased = purchasedIngredients.has(item.ingredientId)
+                          const isSavingThis = purchaseSavingId === item.ingredientId
+
+                          const row = (
+                            <>
+                              {canTrackPurchases && (
+                                <span
+                                  className={`h-5 w-5 shrink-0 rounded-md border flex items-center justify-center transition-all ${
+                                    isPurchased ? 'bg-emerald-500 border-emerald-500' : 'bg-black border-zinc-700'
+                                  }`}
+                                >
+                                  {isSavingThis ? (
+                                    <Loader2 className="h-3 w-3 animate-spin text-white" />
+                                  ) : (
+                                    isPurchased && <Check className="h-3.5 w-3.5 text-white" />
+                                  )}
+                                </span>
+                              )}
+
+                              <div className="min-w-0 flex-1 text-right">
+                                <span
+                                  className={`block text-xs font-bold truncate ${
+                                    isPurchased
+                                      ? 'text-emerald-300 line-through decoration-emerald-500/40'
+                                      : 'text-zinc-200'
+                                  }`}
+                                >
+                                  {item.ingredientName}
+                                </span>
+                                <span
+                                  className={`text-xxs font-semibold uppercase font-mono mt-0.5 inline-block ${
+                                    isPurchased ? 'text-emerald-400/70' : 'text-zinc-400'
+                                  }`}
+                                >
+                                  {item.totalQuantity.toFixed(2)} {getUnitLabel(item.unit)}
+                                </span>
+                              </div>
+
+                              <div className="text-left shrink-0 flex items-center gap-2">
+                                {canTrackPurchases && (
+                                  <span
+                                    className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                                      isPurchased ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-500 bg-zinc-900'
+                                    }`}
+                                  >
+                                    {isPurchased ? 'נרכש' : 'נשאר'}
+                                  </span>
+                                )}
+                                <span
+                                  className={`text-xs font-bold ${isPurchased ? 'text-emerald-500/70' : 'text-amber-500'}`}
+                                >
+                                  ₪{item.totalCost.toFixed(2)}
+                                </span>
+                              </div>
+                            </>
+                          )
+
+                          if (!canTrackPurchases) {
+                            return (
+                              <div
+                                key={item.ingredientId}
+                                className="p-3 bg-zinc-900/20 border border-zinc-900/80 rounded-xl flex items-center gap-3 text-right"
+                              >
+                                {row}
+                              </div>
+                            )
+                          }
+
+                          return (
+                            <button
+                              key={item.ingredientId}
+                              type="button"
+                              disabled={saving || purchaseSavingId !== null}
+                              onClick={() => togglePurchased(item.ingredientId, !isPurchased)}
+                              className={`w-full p-3 rounded-xl border flex items-center gap-3 text-right transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
+                                isPurchased
+                                  ? 'bg-emerald-500/5 border-emerald-500/20 hover:bg-emerald-500/10'
+                                  : 'bg-zinc-900/20 border-zinc-900/80 hover:bg-zinc-900/35 hover:border-zinc-800/80'
+                              }`}
+                            >
+                              {row}
+                            </button>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </div>
 
       </div>

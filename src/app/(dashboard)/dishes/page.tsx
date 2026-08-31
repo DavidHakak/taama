@@ -306,10 +306,17 @@ export default function DishesPage() {
     }
   }
 
-  // Filtering by search text
-  const filteredDishes = dishes.filter((dish) =>
-    dish.name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  // Filtering by search text — matches a dish name or any of its ingredients
+  const normalizedSearch = searchTerm.trim().toLowerCase()
+
+  const isMatchingIngredient = (name?: string) =>
+    !!normalizedSearch && !!name && name.toLowerCase().includes(normalizedSearch)
+
+  const filteredDishes = dishes.filter((dish) => {
+    if (!normalizedSearch) return true
+    if (dish.name.toLowerCase().includes(normalizedSearch)) return true
+    return dish.dish_ingredients?.some((di) => isMatchingIngredient(di.ingredients?.name)) ?? false
+  })
 
   // Grouping dishes by category
   const otherDishes = filteredDishes.filter((d) => !d.category || !CATEGORIES.includes(d.category))
@@ -349,7 +356,7 @@ export default function DishesPage() {
         <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-zinc-400" />
         <input
           type="text"
-          placeholder="חפש מנה / מתכון לפי שם..."
+          placeholder="חפש מנה / מתכון לפי שם או לפי רכיב..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full pr-11 pl-4 py-3 bg-zinc-950 border border-zinc-900 rounded-xl text-white placeholder-zinc-500 text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none text-right"
@@ -365,7 +372,7 @@ export default function DishesPage() {
       ) : filteredDishes.length === 0 ? (
         <div className="text-center py-16 bg-zinc-950 border border-zinc-900 rounded-2xl">
           <UtensilsCrossed className="h-12 w-12 text-zinc-700 mx-auto mb-4" />
-          <p className="text-zinc-400 text-sm font-medium">לא נמצאו מנות התואמות לחיפוש.</p>
+          <p className="text-zinc-400 text-sm font-medium">לא נמצאו מנות התואמות לחיפוש (לפי שם מנה או רכיב).</p>
         </div>
       ) : (
         <div className="space-y-12">
@@ -402,14 +409,20 @@ export default function DishesPage() {
 
                           {/* Summary of ingredients */}
                           <div className="text-xs text-zinc-400 space-y-1 mt-4 border-t border-b border-zinc-900/50 py-3 mb-4 max-h-36 overflow-y-auto">
-                            {dish.dish_ingredients?.map((di) => (
-                              <div key={di.id} className="flex justify-between">
-                                <span className="truncate">{di.ingredients?.name}</span>
-                                <span className="text-zinc-400 shrink-0 font-mono pl-2">
-                                  {di.quantity} {getUnitLabel(di.ingredients?.unit || '')}
-                                </span>
-                              </div>
-                            ))}
+                            {dish.dish_ingredients?.map((di) => {
+                              const matched = isMatchingIngredient(di.ingredients?.name)
+                              return (
+                                <div
+                                  key={di.id}
+                                  className={`flex justify-between ${matched ? 'text-amber-400 font-bold' : ''}`}
+                                >
+                                  <span className="truncate">{di.ingredients?.name}</span>
+                                  <span className={`shrink-0 font-mono pl-2 ${matched ? 'text-amber-400' : 'text-zinc-400'}`}>
+                                    {di.quantity} {getUnitLabel(di.ingredients?.unit || '')}
+                                  </span>
+                                </div>
+                              )
+                            })}
                           </div>
                         </div>
 
@@ -471,14 +484,20 @@ export default function DishesPage() {
 
                         {/* Summary of ingredients */}
                         <div className="text-xs text-zinc-400 space-y-1 mt-4 border-t border-b border-zinc-900/50 py-3 mb-4 max-h-36 overflow-y-auto">
-                          {dish.dish_ingredients?.map((di) => (
-                            <div key={di.id} className="flex justify-between">
-                              <span className="truncate">{di.ingredients?.name}</span>
-                              <span className="text-zinc-400 shrink-0 font-mono pl-2">
-                                {di.quantity} {getUnitLabel(di.ingredients?.unit || '')}
-                              </span>
-                            </div>
-                          ))}
+                          {dish.dish_ingredients?.map((di) => {
+                            const matched = isMatchingIngredient(di.ingredients?.name)
+                            return (
+                              <div
+                                key={di.id}
+                                className={`flex justify-between ${matched ? 'text-amber-400 font-bold' : ''}`}
+                              >
+                                <span className="truncate">{di.ingredients?.name}</span>
+                                <span className={`shrink-0 font-mono pl-2 ${matched ? 'text-amber-400' : 'text-zinc-400'}`}>
+                                  {di.quantity} {getUnitLabel(di.ingredients?.unit || '')}
+                                </span>
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
 

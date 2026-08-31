@@ -57,6 +57,18 @@ export const orderDishes = pgTable('order_dishes', {
   is_prepared: boolean('is_prepared').notNull().default(false),
 })
 
+// מעקב רכש לרשימת הקניות של אירוע: מה כבר נקנה ומה עוד חסר
+export const orderPurchases = pgTable('order_purchases', {
+  order_id: uuid('order_id')
+    .references(() => orders.id, { onDelete: 'cascade' })
+    .notNull(),
+  ingredient_id: uuid('ingredient_id')
+    .references(() => ingredients.id, { onDelete: 'cascade' })
+    .notNull(),
+  is_purchased: boolean('is_purchased').notNull().default(false),
+  updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+})
+
 export const profiles = pgTable('profiles', {
   id: uuid('id').primaryKey(), // references auth.users.id
   email: text('email').notNull(),

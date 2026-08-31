@@ -109,8 +109,8 @@ type SortMode = 'priority' | 'due' | 'created'
 type DueFilter = 'all' | 'overdue' | 'today' | 'week' | 'none'
 
 const SORT_OPTIONS: { value: SortMode; label: string }[] = [
-  { value: 'priority', label: 'לפי עדיפות' },
   { value: 'due', label: 'לפי תאריך יעד' },
+  { value: 'priority', label: 'לפי עדיפות' },
   { value: 'created', label: 'לפי תאריך פתיחה' },
 ]
 
@@ -303,10 +303,13 @@ export default function TasksPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | TaskStatus>('all')
   const [priorityFilter, setPriorityFilter] = useState<'all' | TaskPriority>('all')
   const [dueFilter, setDueFilter] = useState<DueFilter>('all')
-  const [sortMode, setSortMode] = useState<SortMode>('priority')
+  const [sortMode, setSortMode] = useState<SortMode>('due')
 
   /** Categories start collapsed; this holds the ids the user opened. */
   const [openCats, setOpenCats] = useState<Set<string>>(new Set())
+
+  /** Completed tasks are folded away per category until the user opens them. */
+  const [openDoneCats, setOpenDoneCats] = useState<Set<string>>(new Set())
 
   /** Native HTML5 drag state for category reordering. */
   const [dragCatId, setDragCatId] = useState<string | null>(null)
@@ -440,33 +443,38 @@ export default function TasksPage() {
   const byPriority = (a: Task, b: Task) =>
     PRIORITY_RANK[b.priority] - PRIORITY_RANK[a.priority]
 
-  /** Completed tasks always sink to the bottom, whatever the sort mode. */
+  /**
+   * Completed tasks live in their own bucket so every category can fold them
+   * away, and both buckets share the active sort (deadline, then priority).
+   */
   const tasksByCategory = useMemo(() => {
-    const map = new Map<string, Task[]>()
-    for (const c of categories) map.set(c.id, [])
+    const map = new Map<string, { active: Task[]; done: Task[] }>()
+    for (const c of categories) map.set(c.id, { active: [], done: [] })
 
     for (const t of visibleTasks) {
       const bucket = map.get(t.category_id)
-      if (bucket) bucket.push(t)
+      if (!bucket) continue
+      if (t.status === 'done') bucket.done.push(t)
+      else bucket.active.push(t)
     }
 
     const comparators: Record<SortMode, ((a: Task, b: Task) => number)[]> = {
-      priority: [byPriority, byDueDate, byCreatedDesc],
       due: [byDueDate, byPriority, byCreatedDesc],
+      priority: [byPriority, byDueDate, byCreatedDesc],
       created: [byCreatedDesc, byPriority],
     }
 
+    const sortTasks = (a: Task, b: Task) => {
+      for (const cmp of comparators[sortMode]) {
+        const r = cmp(a, b)
+        if (r !== 0) return r
+      }
+      return 0
+    }
+
     for (const bucket of map.values()) {
-      bucket.sort((a, b) => {
-        if ((a.status === 'done') !== (b.status === 'done')) {
-          return a.status === 'done' ? 1 : -1
-        }
-        for (const cmp of comparators[sortMode]) {
-          const r = cmp(a, b)
-          if (r !== 0) return r
-        }
-        return 0
-      })
+      bucket.active.sort(sortTasks)
+      bucket.done.sort(sortTasks)
     }
     return map
   }, [categories, visibleTasks, sortMode])
@@ -475,6 +483,15 @@ export default function TasksPage() {
 
   const toggleCat = (id: string) => {
     setOpenCats((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleDoneCat = (id: string) => {
+    setOpenDoneCats((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -940,7 +957,9 @@ export default function TasksPage() {
           </div>
 
           {categories.map((cat, index) => {
-            const catTasks = tasksByCategory.get(cat.id) ?? []
+            const bucket = tasksByCategory.get(cat.id) ?? { active: [], done: [] }
+            const activeTasks = bucket.active
+            const doneTasks = bucket.done
             const totalInCat = tasks.filter((t) => t.category_id === cat.id).length
             const doneInCat = tasks.filter(
               (t) => t.category_id === cat.id && t.status === 'done'
@@ -950,6 +969,8 @@ export default function TasksPage() {
             // An active filter force-opens every category, otherwise matching
             // tasks would stay hidden behind a collapsed header.
             const isOpen = filtersActive || openCats.has(cat.id)
+            // Filtering to 'done' would otherwise land on an empty-looking card.
+            const doneOpen = statusFilter === 'done' || openDoneCats.has(cat.id)
             const isDragging = dragCatId === cat.id
             const isDropTarget = dragOverCatId === cat.id && dragCatId !== cat.id
 
@@ -1044,7 +1065,7 @@ export default function TasksPage() {
                       <span className="text-[11px] font-bold text-zinc-500 bg-zinc-900 border border-zinc-800 rounded-md px-2 py-0.5 shrink-0">
                         {doneInCat}/{totalInCat}
                       </span>
-                      {!isOpen && catTasks.some(isOverdue) && (
+                      {!isOpen && activeTasks.some(isOverdue) && (
                         <span className="text-[10px] font-black text-[#a3282f] bg-[#fbeaea] border border-[#f0cccc] rounded-md px-2 py-0.5 shrink-0">
                           באיחור
                         </span>
@@ -1086,118 +1107,76 @@ export default function TasksPage() {
                 </header>
 
                 {/* Tasks — collapsed by default */}
-                {!isOpen ? null : catTasks.length === 0 ? (
+                {!isOpen ? null : activeTasks.length === 0 && doneTasks.length === 0 ? (
                   <p className="px-5 py-8 text-center text-xs font-semibold text-zinc-500">
                     {totalInCat === 0
                       ? 'אין משימות בקטגוריה זו עדיין.'
                       : 'אין משימות התואמות את הסינון הנוכחי.'}
                   </p>
                 ) : (
-                  <ul className="divide-y divide-zinc-900">
-                    {catTasks.map((task) => {
-                      const deadline = deadlineInfo(task)
-                      const rowBusy = busyTaskId === task.id
-                      const done = task.status === 'done'
+                  <>
+                    {activeTasks.length > 0 && (
+                      <ul className="divide-y divide-zinc-900">
+                        {activeTasks.map((task) => (
+                          <TaskRow
+                            key={task.id}
+                            task={task}
+                            rowBusy={busyTaskId === task.id}
+                            anyBusy={anyBusy}
+                            onStatusChange={(next) => changeStatus(task, next)}
+                            onEdit={() => openEditTask(task)}
+                            onDelete={() => deleteTask(task)}
+                          />
+                        ))}
+                      </ul>
+                    )}
 
-                      return (
-                        <li
-                          key={task.id}
-                          className={`px-4 sm:px-5 py-4 transition-colors hover:bg-zinc-900/40 ${
-                            rowBusy ? 'opacity-60' : ''
-                          }`}
+                    {activeTasks.length === 0 && (
+                      <p className="px-5 py-8 text-center text-xs font-semibold text-[#3f6b3f]">
+                        כל המשימות בקטגוריה זו בוצעו.
+                      </p>
+                    )}
+
+                    {/* Completed tasks — folded away until opened */}
+                    {doneTasks.length > 0 && (
+                      <div className={activeTasks.length > 0 ? 'border-t border-zinc-900' : ''}>
+                        <button
+                          type="button"
+                          onClick={() => toggleDoneCat(cat.id)}
+                          className="w-full flex items-center gap-2 px-4 sm:px-5 py-3 text-right hover:bg-zinc-900/40 transition-colors cursor-pointer"
                         >
-                          <div className="flex flex-col lg:flex-row lg:items-start gap-3">
-                            {/* Main */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <h3
-                                  className={`text-sm font-bold leading-snug ${
-                                    done
-                                      ? 'text-zinc-500 line-through'
-                                      : 'text-zinc-100'
-                                  }`}
-                                >
-                                  {task.title}
-                                </h3>
-                                {task.priority !== 'normal' && (
-                                  <span
-                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-black ${
-                                      PRIORITY_META[task.priority].pill
-                                    }`}
-                                  >
-                                    <Flag className="h-2.5 w-2.5" />
-                                    {PRIORITY_META[task.priority].label}
-                                  </span>
-                                )}
-                              </div>
+                          <ChevronDown
+                            className={`h-3.5 w-3.5 shrink-0 text-zinc-500 transition-transform ${
+                              doneOpen ? '' : 'rotate-90'
+                            }`}
+                          />
+                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[#3f6b3f]" />
+                          <span className="text-[11px] font-black text-zinc-400">
+                            משימות שבוצעו ({doneTasks.length})
+                          </span>
+                          <span className="text-[10px] font-semibold text-zinc-600 mr-auto ml-0">
+                            {doneOpen ? 'הסתר' : 'הצג'}
+                          </span>
+                        </button>
 
-                              {task.details && (
-                                <p className="mt-1 text-xs text-zinc-400 font-medium leading-relaxed whitespace-pre-line">
-                                  {task.details}
-                                </p>
-                              )}
-
-                              {/* Tracking line */}
-                              <div className="mt-2.5 flex items-center gap-2 flex-wrap">
-                                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500">
-                                  <CalendarPlus className="h-3 w-3" />
-                                  נפתחה: {formatTimestamp(task.created_at)}
-                                </span>
-
-                                {deadline ? (
-                                  <span
-                                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[11px] font-bold ${deadline.className}`}
-                                  >
-                                    <CalendarClock className="h-3 w-3" />
-                                    {task.due_date && !done
-                                      ? `${formatDateOnly(task.due_date)} · ${deadline.text}`
-                                      : deadline.text}
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500">
-                                    <CalendarClock className="h-3 w-3" />
-                                    ללא דד-ליין
-                                  </span>
-                                )}
-
-                                {done && task.completed_at && (
-                                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#3f6b3f]">
-                                    <CheckCircle2 className="h-3 w-3" />
-                                    הושלמה: {formatTimestamp(task.completed_at)}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Actions */}
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <StatusMenu
-                                value={task.status}
-                                disabled={anyBusy}
-                                onChange={(next) => changeStatus(task, next)}
+                        {doneOpen && (
+                          <ul className="divide-y divide-zinc-900 border-t border-zinc-900">
+                            {doneTasks.map((task) => (
+                              <TaskRow
+                                key={task.id}
+                                task={task}
+                                rowBusy={busyTaskId === task.id}
+                                anyBusy={anyBusy}
+                                onStatusChange={(next) => changeStatus(task, next)}
+                                onEdit={() => openEditTask(task)}
+                                onDelete={() => deleteTask(task)}
                               />
-                              <button
-                                onClick={() => openEditTask(task)}
-                                disabled={anyBusy}
-                                title="ערוך משימה"
-                                className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-100 hover:bg-zinc-900 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                <Edit2 className="h-3.5 w-3.5" />
-                              </button>
-                              <button
-                                onClick={() => deleteTask(task)}
-                                disabled={anyBusy}
-                                title="מחק משימה"
-                                className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        </li>
-                      )
-                    })}
-                  </ul>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </section>
             )
@@ -1372,6 +1351,123 @@ export default function TasksPage() {
 /* -------------------------------------------------------------------------- */
 /*                              Small UI helpers                              */
 /* -------------------------------------------------------------------------- */
+
+/** One task line — shared by the active list and the folded 'done' list. */
+function TaskRow({
+  task,
+  rowBusy,
+  anyBusy,
+  onStatusChange,
+  onEdit,
+  onDelete,
+}: {
+  task: Task
+  rowBusy: boolean
+  anyBusy: boolean
+  onStatusChange: (next: TaskStatus) => void
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  const deadline = deadlineInfo(task)
+  const done = task.status === 'done'
+
+  return (
+    <li
+      className={`px-4 sm:px-5 py-4 transition-colors hover:bg-zinc-900/40 ${
+        rowBusy ? 'opacity-60' : ''
+      }`}
+    >
+      <div className="flex flex-col lg:flex-row lg:items-start gap-3">
+        {/* Main */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3
+              className={`text-sm font-bold leading-snug ${
+                done
+                  ? 'text-zinc-500 line-through'
+                  : 'text-zinc-100'
+              }`}
+            >
+              {task.title}
+            </h3>
+            {task.priority !== 'normal' && (
+              <span
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-black ${
+                  PRIORITY_META[task.priority].pill
+                }`}
+              >
+                <Flag className="h-2.5 w-2.5" />
+                {PRIORITY_META[task.priority].label}
+              </span>
+            )}
+          </div>
+
+          {task.details && (
+            <p className="mt-1 text-xs text-zinc-400 font-medium leading-relaxed whitespace-pre-line">
+              {task.details}
+            </p>
+          )}
+
+          {/* Tracking line */}
+          <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500">
+              <CalendarPlus className="h-3 w-3" />
+              נפתחה: {formatTimestamp(task.created_at)}
+            </span>
+
+            {deadline ? (
+              <span
+                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[11px] font-bold ${deadline.className}`}
+              >
+                <CalendarClock className="h-3 w-3" />
+                {task.due_date && !done
+                  ? `${formatDateOnly(task.due_date)} · ${deadline.text}`
+                  : deadline.text}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500">
+                <CalendarClock className="h-3 w-3" />
+                ללא דד-ליין
+              </span>
+            )}
+
+            {done && task.completed_at && (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#3f6b3f]">
+                <CheckCircle2 className="h-3 w-3" />
+                הושלמה: {formatTimestamp(task.completed_at)}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <StatusMenu
+            value={task.status}
+            disabled={anyBusy}
+            onChange={onStatusChange}
+          />
+          <button
+            onClick={onEdit}
+            disabled={anyBusy}
+            title="ערוך משימה"
+            className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-100 hover:bg-zinc-900 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Edit2 className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={onDelete}
+            disabled={anyBusy}
+            title="מחק משימה"
+            className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+    </li>
+  )
+}
 
 function StatCard({ label, value, accent }: { label: string; value: number; accent: string }) {
   return (
