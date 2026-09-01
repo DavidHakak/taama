@@ -5,6 +5,7 @@ import { shopOrders, shopOrderItems, shopProducts, profiles, shopCoupons, shopPr
 import { createClient } from '@/utils/supabase/server'
 import { eq, and, or, isNull, gte, sql, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
+import { getStaffSubscriptions, sendToSubscriptions } from '@/utils/push'
 
 interface OrderPayloadItem {
   productId: string
@@ -31,7 +32,7 @@ export async function placeOrder(
 
     // 2. Verify if user is blocked
     const [profile] = await db
-      .select({ isBlocked: profiles.is_blocked })
+      .select({ isBlocked: profiles.is_blocked, fullName: profiles.full_name })
       .from(profiles)
       .where(eq(profiles.id, user.id))
       .limit(1)
@@ -76,7 +77,7 @@ export async function placeOrder(
     }
 
     // 3. Database Transaction
-    const newOrderId = await db.transaction(async (tx) => {
+    const placedOrder = await db.transaction(async (tx) => {
       // Calculate subtotal of items
       const subtotal = items.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0)
 
@@ -249,13 +250,37 @@ export async function placeOrder(
 
       await tx.insert(shopOrderItems).values(orderItemsValues)
 
-      return newOrder.id
+      return { id: newOrder.id, total: finalTotalPrice }
     })
 
     // 4. Invalidate layout caches to update availability instantly
     revalidatePath('/')
 
-    return { success: true, orderId: newOrderId }
+    // 5. Tell the staff an order came in.
+    //
+    // The order is already committed at this point, so a push failure must
+    // never turn a successful order into an error for the customer — hence the
+    // catch that only logs. Staff only: getCustomerSubscriptions() would also
+    // reach shop customers, who share the push_subscriptions table.
+    try {
+      const subscriptions = await getStaffSubscriptions()
+      const customerName = profile?.fullName?.trim() || user.email || 'לקוח'
+      const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
+
+      await sendToSubscriptions(subscriptions, {
+        title: 'הזמנה חדשה בחנות',
+        body: `${customerName} · ${itemCount} פריטים · ₪${placedOrder.total.toFixed(2)} · ${event.name}`,
+        url: '/shop-admin/orders',
+        actionTitle: 'פתח הזמנות',
+        // Distinct per order, so a second order does not silently replace the
+        // notification for the first one before it has been read.
+        tag: `taama-shop-order-${placedOrder.id}`,
+      })
+    } catch (pushErr) {
+      console.error('Order placed but staff push notification failed:', pushErr)
+    }
+
+    return { success: true, orderId: placedOrder.id }
   } catch (err: any) {
     console.error('Error placing order:', err)
     return { success: false, error: err.message || 'שגיאה במהלך ביצוע ההזמנה' }
