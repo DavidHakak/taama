@@ -1,12 +1,34 @@
-import { pgTable, uuid, text, numeric, timestamp, integer, date, boolean, pgView } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, numeric, timestamp, integer, date, boolean, pgView, primaryKey } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
+// מותגי הקייטרינג. מטבח פיזי אחד, שתי חזיתות נפרדות לגמרי מול הלקוח.
+export const brands = pgTable('brands', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  slug: text('slug').notNull().unique(),
+  name: text('name').notNull(),
+  tagline: text('tagline'),
+  // הכשרות מוצהרת כאן ולא נגזרת מהמתכון: 18 מ-42 המוצרים אינם מקושרים
+  // לרכיבים כלל, ולכן גזירה הייתה מחזירה "לא ידוע" לחצי מהקטלוג.
+  kashrut: text('kashrut').notNull(), // 'meat' | 'dairy' | 'parve'
+  // מנגנון הכיבוי: hidden = המותג לא מוגש בכלל.
+  status: text('status').notNull().default('hidden'), // 'live' | 'paused' | 'hidden'
+  primary_domain: text('primary_domain'),
+  theme_key: text('theme_key'),
+  position: integer('position').notNull().default(0),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+})
+
+// רכיבים גלובליים בכוונה: מטבח אחד, רכישה אחת, רשימת קניות אחת.
+// ההפרדה בין המותגים יושבת על שכבת המוצר, לא כאן.
 export const ingredients = pgTable('ingredients', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   unit: text('unit').notNull(),
   cost_per_unit: numeric('cost_per_unit', { precision: 10, scale: 2 }).notNull().default('0.00'),
   category: text('category').notNull().default('אחר'),
+  // 'meat' | 'dairy' | 'parve'. תכונה של הרכיב עצמו, לא שיוך למותג —
+  // עוף הוא בשרי בלי קשר לכמה מותגים יש. משמש לאכיפה מול כשרות המותג.
+  kashrut: text('kashrut').notNull().default('parve'),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
@@ -83,6 +105,8 @@ export const profiles = pgTable('profiles', {
 // אירועי חלוקה/מכירה לשבתות וחגים
 export const shopEvents = pgTable('shop_events', {
   id: uuid('id').primaryKey().defaultRandom(),
+  // nullable עד M5, שירוץ יחד עם הקוד שמספק brand_id בכל insert.
+  brand_id: uuid('brand_id').references(() => brands.id),
   name: text('name').notNull(),
   pickup_date: date('pickup_date').notNull(),
   is_active: boolean('is_active').default(true).notNull(),
@@ -94,6 +118,8 @@ export const shopEvents = pgTable('shop_events', {
 // מוצרי החנות (עצמאיים ומנותקים מטבלת המנות של הקייטרינג)
 export const shopProducts = pgTable('shop_products', {
   id: uuid('id').primaryKey().defaultRandom(),
+  // nullable עד M5, שירוץ יחד עם הקוד שמספק brand_id בכל insert.
+  brand_id: uuid('brand_id').references(() => brands.id),
   name: text('name').notNull(),
   category: text('category').notNull(),
   is_visible: boolean('is_visible').default(true).notNull(),
@@ -127,6 +153,8 @@ export const shopProductIngredients = pgTable('shop_product_ingredients', {
 // קופונים בחנות
 export const shopCoupons = pgTable('shop_coupons', {
   id: uuid('id').primaryKey().defaultRandom(),
+  // nullable עד M5, שירוץ יחד עם הקוד שמספק brand_id בכל insert.
+  brand_id: uuid('brand_id').references(() => brands.id),
   code: text('code').notNull().unique(),
   discount_type: text('discount_type').notNull(), // 'percentage' | 'fixed'
   discount_value: numeric('discount_value', { precision: 10, scale: 2 }).notNull(),
@@ -141,6 +169,8 @@ export const shopCoupons = pgTable('shop_coupons', {
 // הזמנות מהחנות
 export const shopOrders = pgTable('shop_orders', {
   id: uuid('id').primaryKey().defaultRandom(),
+  // nullable עד M5, שירוץ יחד עם הקוד שמספק brand_id בכל insert.
+  brand_id: uuid('brand_id').references(() => brands.id),
   user_id: uuid('user_id').references(() => profiles.id).notNull(),
   event_id: uuid('event_id').references(() => shopEvents.id).notNull(),
   status: text('status').notNull().default('New'),
@@ -163,6 +193,8 @@ export const shopOrderItems = pgTable('shop_order_items', {
 // מבצעים בחנות
 export const shopPromotions = pgTable('shop_promotions', {
   id: uuid('id').primaryKey().defaultRandom(),
+  // nullable עד M5, שירוץ יחד עם הקוד שמספק brand_id בכל insert.
+  brand_id: uuid('brand_id').references(() => brands.id),
   name: text('name').notNull(),
   category: text('category').notNull(),
   package_qty: integer('package_qty').notNull(),
@@ -174,6 +206,8 @@ export const shopPromotions = pgTable('shop_promotions', {
 // הגדרות חנות
 export const storeSettings = pgTable('store_settings', {
   key: text('key').primaryKey(),
+  // nullable עד M5, שירוץ יחד עם הקוד שמספק brand_id בכל insert.
+  brand_id: uuid('brand_id').references(() => brands.id),
   value: text('value').notNull(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })
@@ -226,6 +260,21 @@ export const pushSubscriptions = pgTable('push_subscriptions', {
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   last_success_at: timestamp('last_success_at', { withTimezone: true }),
 })
+
+// כיבוי/הדלקה של סוג התראה מסוים עבור משתמש מסוים.
+// שורה קיימת רק כשהמשתמש שינה את ברירת המחדל — היעדר שורה = מקבל.
+export const notificationPreferences = pgTable(
+  'notification_preferences',
+  {
+    user_id: uuid('user_id')
+      .references(() => profiles.id, { onDelete: 'cascade' })
+      .notNull(),
+    topic: text('topic').notNull(), // ראה NOTIFICATION_TOPICS ב-utils/push
+    enabled: boolean('enabled').notNull().default(true),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.user_id, table.topic] })]
+)
 
 // משימות בתוך קטגוריה
 export const tasks = pgTable('tasks', {
