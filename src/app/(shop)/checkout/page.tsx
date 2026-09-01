@@ -32,6 +32,8 @@ export default function CheckoutPage() {
     discountType: string
     discountValue: number
     discountAmount: number
+    /** The basket this discount was priced against — see couponIsStale below. */
+    cartSignature: string
   } | null>(null)
   const [couponError, setCouponError] = useState<string | null>(null)
 
@@ -79,6 +81,12 @@ export default function CheckoutPage() {
     loadPickupDetails()
   }, [])
 
+  /** Identifies the exact basket, so a priced coupon can tell when it moved. */
+  const cartSignature = cartItems
+    .map((item) => `${item.productId}|${item.sizeType}|${item.quantity}`)
+    .sort()
+    .join(',')
+
   const handleApplyCoupon = async () => {
     if (!couponCodeInput.trim()) return
     setCouponLoading(true)
@@ -89,7 +97,7 @@ export default function CheckoutPage() {
     const res = await validateCoupon(couponCodeInput, baseTotal)
 
     if (res.success && res.coupon) {
-      setAppliedCoupon(res.coupon)
+      setAppliedCoupon({ ...res.coupon, cartSignature })
       setCouponCodeInput('')
     } else {
       setCouponError(res.error || 'קוד קופון לא תקין')
@@ -97,9 +105,23 @@ export default function CheckoutPage() {
     setCouponLoading(false)
   }
 
+  // A coupon's discount is calculated once, when it is applied, and then held
+  // in state. For a percentage coupon that figure stops matching the moment the
+  // basket changes, and checkout rejects any order whose total disagrees with
+  // the server — so the customer would be blocked with no explanation.
+  //
+  // Derived rather than cleared in an effect: the coupon records the basket it
+  // was priced against, and stops counting as soon as that basket moves. No
+  // extra render, and no window where the displayed total is already wrong.
+  const couponIsStale = appliedCoupon !== null && appliedCoupon.cartSignature !== cartSignature
+  const effectiveCoupon = couponIsStale ? null : appliedCoupon
+  const couponNotice = couponIsStale
+    ? 'הסל השתנה — יש להחיל את הקופון מחדש'
+    : couponError
+
   // Discount & Totals Math
   const baseTotal = Math.max(0, subtotal - totalDiscount)
-  const couponDiscountAmount = appliedCoupon ? appliedCoupon.discountAmount : 0
+  const couponDiscountAmount = effectiveCoupon ? effectiveCoupon.discountAmount : 0
   const finalTotal = Math.max(0, baseTotal - couponDiscountAmount)
 
   const handleCheckoutSubmit = async (e: React.FormEvent) => {
@@ -125,7 +147,10 @@ export default function CheckoutPage() {
       sizeType: item.sizeType,
     }))
 
-    const result = await placeOrder(eventId, itemsPayload, finalTotal, appliedCoupon?.code)
+    // effectiveCoupon, not appliedCoupon: finalTotal already excludes a stale
+    // coupon, so sending its code would have the server apply a discount the
+    // customer is not being shown and reject the order on the total.
+    const result = await placeOrder(eventId, itemsPayload, finalTotal, effectiveCoupon?.code)
 
     if (result.success) {
       clearCart()
@@ -196,12 +221,12 @@ export default function CheckoutPage() {
               קוד קופון
             </h3>
 
-            {appliedCoupon ? (
+            {effectiveCoupon ? (
               <div className="flex items-center justify-between bg-emerald-500/5 border border-emerald-500/10 p-2.5 sm:p-3 rounded-lg sm:rounded-xl">
                 <div className="text-right">
-                  <p className="text-xs font-bold text-emerald-400">קופון הוחל: {appliedCoupon.code}</p>
+                  <p className="text-xs font-bold text-emerald-400">קופון הוחל: {effectiveCoupon.code}</p>
                   <p className="text-[10px] text-zinc-500 mt-0.5">
-                    הנחה בגובה {appliedCoupon.discountType === 'percentage' ? `${appliedCoupon.discountValue}%` : `₪${appliedCoupon.discountValue}`}
+                    הנחה בגובה {effectiveCoupon.discountType === 'percentage' ? `${effectiveCoupon.discountValue}%` : `₪${effectiveCoupon.discountValue}`}
                   </p>
                 </div>
                 <button
@@ -231,8 +256,8 @@ export default function CheckoutPage() {
                     {couponLoading ? 'בודק...' : 'החל'}
                   </button>
                 </div>
-                {couponError && (
-                  <p className="text-[10px] font-bold text-rose-400">{couponError}</p>
+                {couponNotice && (
+                  <p className="text-[10px] font-bold text-rose-400">{couponNotice}</p>
                 )}
               </div>
             )}
@@ -271,7 +296,7 @@ export default function CheckoutPage() {
               )}
               {couponDiscountAmount > 0 && (
                 <div className="flex justify-between text-emerald-500 font-semibold">
-                  <span>הנחת קופון ({appliedCoupon?.code})</span>
+                  <span>הנחת קופון ({effectiveCoupon?.code})</span>
                   <span className="font-mono">-₪{couponDiscountAmount.toFixed(2)}</span>
                 </div>
               )}

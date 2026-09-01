@@ -15,6 +15,24 @@ interface OrderPayloadItem {
   sizeType: string
 }
 
+/**
+ * Shown whenever anything the browser sent about money disagrees with the
+ * database — a stale cart, a price the manager just changed, or a forged
+ * payload. All three are the same thing from here: we will not charge a
+ * number the customer did not see, and we will not trust one they supplied.
+ */
+const PRICE_MISMATCH_ERROR =
+  'המחירים של חלק מהפריטים התעדכנו. אנא רענן את העמוד ובדוק את הסל מחדש.'
+
+/**
+ * Money is compared in whole agorot. Prices are numeric(10,2) in Postgres and
+ * arrive as strings, while the browser sends JSON floats — comparing those
+ * directly reports mismatches that are pure binary-floating-point noise.
+ */
+const toAgorot = (value: number) => Math.round(value * 100)
+
+const variantKey = (productId: string, sizeType: string) => `${productId}|${sizeType}`
+
 export async function placeOrder(
   eventId: string,
   items: OrderPayloadItem[],
@@ -78,8 +96,61 @@ export async function placeOrder(
 
     // 3. Database Transaction
     const placedOrder = await db.transaction(async (tx) => {
-      // Calculate subtotal of items
-      const subtotal = items.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0)
+      // --- Lock every variant up front and read its authoritative price ---
+      //
+      // This used to happen at the end, purely as a stock check, which left the
+      // whole pricing calculation below running on numbers the browser sent.
+      // The locked row is the only source of truth for price, and taking the
+      // locks here means price and stock see the same stable row.
+      //
+      // Locks are taken in a deterministic order so two checkouts touching the
+      // same products always acquire them in the same sequence and cannot
+      // deadlock each other.
+      const lockOrder = [...items].sort(
+        (a, b) =>
+          a.productId.localeCompare(b.productId) || a.sizeType.localeCompare(b.sizeType)
+      )
+
+      const variants = new Map<string, { price: number; stockLimit: number | null }>()
+
+      for (const item of lockOrder) {
+        const key = variantKey(item.productId, item.sizeType)
+        if (variants.has(key)) continue
+
+        const [variant] = await tx
+          .select()
+          .from(shopProductVariants)
+          .where(
+            and(
+              eq(shopProductVariants.shop_product_id, item.productId),
+              eq(shopProductVariants.size_type, item.sizeType)
+            )
+          )
+          .for('update')
+
+        if (!variant) {
+          throw new Error(`המוצר ${item.name} במידה ${item.sizeType} לא נמצא במאגר`)
+        }
+
+        variants.set(key, {
+          price: Number(variant.price),
+          stockLimit: variant.stock_limit,
+        })
+      }
+
+      /** The DB price for a cart line. Never read item.price for money. */
+      const priceOf = (item: OrderPayloadItem) =>
+        variants.get(variantKey(item.productId, item.sizeType))!.price
+
+      // --- Reject the order if any line drifted from the database ---
+      for (const item of items) {
+        if (toAgorot(Number(item.price)) !== toAgorot(priceOf(item))) {
+          throw new Error(PRICE_MISMATCH_ERROR)
+        }
+      }
+
+      // Calculate subtotal of items, from database prices only
+      const subtotal = items.reduce((sum, item) => sum + priceOf(item) * item.quantity, 0)
 
       // Fetch categories for the products to run category bundle promotions
       const productIds = items.map(item => item.productId)
@@ -114,7 +185,7 @@ export async function placeOrder(
           const allPrices: number[] = []
           categoryItems.forEach(item => {
             for (let i = 0; i < item.quantity; i++) {
-              allPrices.push(Number(item.price))
+              allPrices.push(priceOf(item))
             }
           })
           allPrices.sort((a, b) => a - b)
@@ -187,42 +258,57 @@ export async function placeOrder(
 
       const finalTotalPrice = Math.max(0, baseTotal - couponDiscountVal)
 
-      // Validate stock for all items under lock
+      // --- Reject if the total the customer confirmed is not the one we computed ---
+      //
+      // Every line price already matched, so a gap here means the promotion or
+      // coupon maths moved underneath the customer. The common case is a
+      // percentage coupon: its amount is calculated when the coupon is applied
+      // and stays frozen, so editing the cart afterwards leaves the browser
+      // showing a discount that no longer matches the basket. Charging the
+      // recomputed figure would bill them for a number they never approved.
+      if (toAgorot(totalPrice) !== toAgorot(finalTotalPrice)) {
+        throw new Error(PRICE_MISMATCH_ERROR)
+      }
+
+      // --- Validate stock, against quantities aggregated per variant ---
+      //
+      // Aggregated rather than per line: a payload splitting one variant across
+      // two lines would otherwise have each line checked on its own, and could
+      // clear a limit that the combined quantity exceeds.
+      const quantityByVariant = new Map<
+        string,
+        { item: OrderPayloadItem; quantity: number }
+      >()
+
       for (const item of items) {
-        // Lock shop_product_variant row
-        const [variant] = await tx
-          .select()
-          .from(shopProductVariants)
+        const key = variantKey(item.productId, item.sizeType)
+        const entry = quantityByVariant.get(key)
+        if (entry) {
+          entry.quantity += item.quantity
+        } else {
+          quantityByVariant.set(key, { item, quantity: item.quantity })
+        }
+      }
+
+      for (const [key, { item, quantity }] of quantityByVariant) {
+        const { stockLimit } = variants.get(key)!
+        if (stockLimit === null) continue
+
+        const [orderedSum] = await tx
+          .select({ sum: sql<number>`COALESCE(SUM(${shopOrderItems.quantity}), 0)` })
+          .from(shopOrderItems)
+          .innerJoin(shopOrders, eq(shopOrderItems.shop_order_id, shopOrders.id))
           .where(
             and(
-              eq(shopProductVariants.shop_product_id, item.productId),
-              eq(shopProductVariants.size_type, item.sizeType)
+              eq(shopOrders.event_id, eventId),
+              eq(shopOrderItems.shop_product_id, item.productId),
+              eq(shopOrderItems.size_type, item.sizeType)
             )
           )
-          .for('update')
 
-        if (!variant) {
-          throw new Error(`המוצר ${item.name} במידה ${item.sizeType} לא נמצא במאגר`)
-        }
-
-        // Calculate available stock if limited
-        if (variant.stock_limit !== null) {
-          const [orderedSum] = await tx
-            .select({ sum: sql<number>`COALESCE(SUM(${shopOrderItems.quantity}), 0)` })
-            .from(shopOrderItems)
-            .innerJoin(shopOrders, eq(shopOrderItems.shop_order_id, shopOrders.id))
-            .where(
-              and(
-                eq(shopOrders.event_id, eventId),
-                eq(shopOrderItems.shop_product_id, item.productId),
-                eq(shopOrderItems.size_type, item.sizeType)
-              )
-            )
-
-          const availableStock = variant.stock_limit - Number(orderedSum.sum)
-          if (item.quantity > availableStock) {
-            throw new Error(`אזל מהמלאי עבור "${item.name}" (${item.sizeType}). נותרו רק ${availableStock} יחידות זמינות.`)
-          }
+        const availableStock = stockLimit - Number(orderedSum.sum)
+        if (quantity > availableStock) {
+          throw new Error(`אזל מהמלאי עבור "${item.name}" (${item.sizeType}). נותרו רק ${availableStock} יחידות זמינות.`)
         }
       }
 
@@ -233,19 +319,23 @@ export async function placeOrder(
           user_id: user.id,
           event_id: eventId,
           status: 'New',
-          total_price: finalTotalPrice.toString(),
+          // toFixed(2) rather than toString(): a percentage coupon leaves values
+          // like 223.49700000000001, and the raw string would be silently
+          // rounded by numeric(10,2) anyway. Round here so the stored figure is
+          // the one we compared against above.
+          total_price: finalTotalPrice.toFixed(2),
           coupon_id: couponId,
-          coupon_discount: couponDiscountVal.toString(),
+          coupon_discount: couponDiscountVal.toFixed(2),
         })
         .returning()
 
-      // Insert shopOrderItems
+      // Insert shopOrderItems, recording the database price we charged
       const orderItemsValues = items.map((item) => ({
         shop_order_id: newOrder.id,
         shop_product_id: item.productId,
         size_type: item.sizeType,
         quantity: item.quantity,
-        price_at_purchase: item.price.toString(),
+        price_at_purchase: priceOf(item).toFixed(2),
       }))
 
       await tx.insert(shopOrderItems).values(orderItemsValues)
