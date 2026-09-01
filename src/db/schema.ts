@@ -123,7 +123,10 @@ export const shopProducts = pgTable('shop_products', {
   name: text('name').notNull(),
   category: text('category').notNull(),
   is_visible: boolean('is_visible').default(true).notNull(),
+  // announcement_text פותח מודאל שקופץ ללקוח (storefront-client.tsx:59).
+  // תיאור המוצר יושב ב-description ולא שם, אחרת כל מוצר היה מקפיץ חלון.
   announcement_text: text('announcement_text'),
+  description: text('description'),
   image_url: text('image_url'),
 })
 
@@ -188,6 +191,69 @@ export const shopOrderItems = pgTable('shop_order_items', {
   size_type: text('size_type').notNull(),
   quantity: integer('quantity').notNull(),
   price_at_purchase: numeric('price_at_purchase', { precision: 10, scale: 2 }).notNull(),
+})
+
+// ── אופציות מוצר ──────────────────────────────────────────────
+// "בחר טעם" לקיש ולפשטידה. בניגוד למנוע האופציות של הריפו הישן,
+// שנשא שם וסוג בלבד ולכן לא ידע לגזור רשימת קניות, כאן האופציה
+// נושאת רכיבים — ראה shopOptionIngredients.
+
+export const shopProductOptionGroups = pgTable('shop_product_option_groups', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  shop_product_id: uuid('shop_product_id')
+    .references(() => shopProducts.id, { onDelete: 'cascade' })
+    .notNull(),
+  name: text('name').notNull(),
+  min_select: integer('min_select').notNull().default(1),
+  max_select: integer('max_select').notNull().default(1),
+  is_required: boolean('is_required').notNull().default(true),
+  position: integer('position').notNull().default(0),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+})
+
+export const shopProductOptions = pgTable('shop_product_options', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  group_id: uuid('group_id')
+    .references(() => shopProductOptionGroups.id, { onDelete: 'cascade' })
+    .notNull(),
+  name: text('name').notNull(),
+  // אפס בכל הקטלוג הנוכחי. קיימת כדי שגביית תוספת על פטריות
+  // לא תדרוש מיגרציה.
+  price_delta: numeric('price_delta', { precision: 10, scale: 2 }).notNull().default('0.00'),
+  is_active: boolean('is_active').notNull().default(true),
+  position: integer('position').notNull().default(0),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+})
+
+// מקושרת גם לאופציה וגם לווריאנט, כי הכמות תלויה בשתיהן:
+// קיש בטטה במגש דורש כמות אחרת מקיש בטטה ב-24 מנות אישיות.
+export const shopOptionIngredients = pgTable('shop_option_ingredients', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  option_id: uuid('option_id')
+    .references(() => shopProductOptions.id, { onDelete: 'cascade' })
+    .notNull(),
+  shop_product_variant_id: uuid('shop_product_variant_id')
+    .references(() => shopProductVariants.id, { onDelete: 'cascade' })
+    .notNull(),
+  ingredient_id: uuid('ingredient_id')
+    .references(() => ingredients.id, { onDelete: 'cascade' })
+    .notNull(),
+  quantity: numeric('quantity', { precision: 10, scale: 3 }).notNull().default('0.000'),
+})
+
+// מה הלקוח בחר בפועל. השדות משוכפלים כ-snapshot כדי שהזמנה
+// ישנה תמשיך להציג "קיש בטטה" גם אחרי שהאופציה נמחקה מהקטלוג —
+// ולכן option_id הוא nullable עם SET NULL ולא CASCADE.
+export const shopOrderItemOptions = pgTable('shop_order_item_options', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  shop_order_item_id: uuid('shop_order_item_id')
+    .references(() => shopOrderItems.id, { onDelete: 'cascade' })
+    .notNull(),
+  option_id: uuid('option_id').references(() => shopProductOptions.id, { onDelete: 'set null' }),
+  group_name: text('group_name').notNull(),
+  option_name: text('option_name').notNull(),
+  price_delta: numeric('price_delta', { precision: 10, scale: 2 }).notNull().default('0.00'),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
 // מבצעים בחנות

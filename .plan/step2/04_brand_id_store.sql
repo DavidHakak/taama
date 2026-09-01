@@ -28,10 +28,8 @@ UPDATE shop_coupons    SET brand_id = (SELECT id FROM brands WHERE slug='taama')
 UPDATE shop_promotions SET brand_id = (SELECT id FROM brands WHERE slug='taama') WHERE brand_id IS NULL;
 UPDATE store_settings  SET brand_id = (SELECT id FROM brands WHERE slug='taama') WHERE brand_id IS NULL;
 
--- 6 העוגות החלביות עוברות למותג החלבי, לפי החלטתך.
-UPDATE shop_products
-   SET brand_id = (SELECT id FROM brands WHERE slug='shamenet')
- WHERE category = 'עוגות חלביות';
+-- בוטל 1.9.2026: 6 העוגות החלביות נמכרות בחנות השבת של טעמא ונשארות שם.
+-- (ההעברה ל-shamenet בוטלה ואינה רצה.)
 
 -- ── אינדקסים ──────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS shop_products_brand_idx   ON shop_products   (brand_id);
@@ -43,4 +41,4 @@ CREATE INDEX IF NOT EXISTS shop_promotions_brand_idx ON shop_promotions (brand_i
 -- ── אימות ─────────────────────────────────────────────────
 --  SELECT b.slug, count(*) FROM shop_products p
 --    JOIN brands b ON b.id = p.brand_id GROUP BY b.slug;
---  מצופה:  taama 36  |  shamenet 6
+--  מצופה:  taama 42
