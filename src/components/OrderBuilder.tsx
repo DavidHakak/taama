@@ -53,6 +53,28 @@ interface SelectedDishItem {
 
 const CATEGORIES = ["סלטים", "ראשונות", "עיקריות", "תוספות", "קינוחים"]
 
+/**
+ * מקבץ פריטים לפי קטגוריית המנה שלהם, בסדר הקבוע של CATEGORIES — אותו סדר
+ * שמעקב ההכנה, ההדפסה וסיכום הלקוח כבר מציגים.
+ *
+ * כל מה שאין לו קטגוריה מוכרת (מנה ישנה, קטגוריה שנמחקה) יורד ל'אחר' בסוף
+ * ולא נעלם: עדיף להציג מנה במקום לא צפוי מאשר שתיפול מהמסך בשקט.
+ */
+function groupByDishCategory<T>(items: T[], categoryOf: (item: T) => string | undefined) {
+  const groups = CATEGORIES.map((cat) => ({
+    cat,
+    items: items.filter((item) => categoryOf(item) === cat),
+  })).filter((g) => g.items.length > 0)
+
+  const rest = items.filter((item) => {
+    const cat = categoryOf(item)
+    return !cat || !CATEGORIES.includes(cat)
+  })
+  if (rest.length > 0) groups.push({ cat: 'אחר', items: rest })
+
+  return groups
+}
+
 export default function OrderBuilder({ orderId }: OrderBuilderProps) {
   const router = useRouter()
   const supabase = createClient()
@@ -678,11 +700,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
             const donePrep = prepDishes.filter((x) => x.isPrepared).length
             const pct = totalPrep > 0 ? Math.round((donePrep / totalPrep) * 100) : 0
 
-            const grouped = CATEGORIES
-              .map((cat) => ({ cat, items: prepDishes.filter((x) => x.dish.category === cat) }))
-              .filter((g) => g.items.length > 0)
-            const otherItems = prepDishes.filter((x) => !CATEGORIES.includes(x.dish.category))
-            if (otherItems.length > 0) grouped.push({ cat: 'אחר', items: otherItems })
+            const grouped = groupByDishCategory(prepDishes, (x) => x.dish.category)
 
             return (
               <div className="bg-zinc-950 border border-amber-500/20 rounded-2xl shadow-xl overflow-hidden">
@@ -1057,7 +1075,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
             {openSections.dishes && (
             <div className="px-6 pb-6 space-y-5">
 
-            <div className="space-y-3">
+            <div className="space-y-5">
               {(() => {
                 const startersCount = selectedDishes.filter((sd) => {
                   const d = dishesList.find((dish) => dish.id === sd.dishId)
@@ -1069,7 +1087,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                   return d?.category === 'עיקריות'
                 }).length
 
-                return selectedDishes.map((item, idx) => {
+                const renderRow = (item: SelectedDishItem, idx: number) => {
                   // Calculate single line dish plate cost
                   const dishObj = dishesList.find((d) => d.id === item.dishId)
                   const dishCost = dishObj
@@ -1133,7 +1151,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                                 autoFocus
                               />
                             </div>
-                            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-0.5 pr-1">
+                            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-3 pr-1">
                                 {(() => {
                                   const filteredOptions = dishesList.filter((d) =>
                                     d.name.toLowerCase().includes(dishSearch.toLowerCase()) &&
@@ -1142,31 +1160,42 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                                   if (filteredOptions.length === 0) {
                                     return <p className="text-xxs text-zinc-600 py-3.5 text-center">לא נמצאו מנות</p>
                                   }
-                                  return filteredOptions.map((d) => {
-                                    const isSelected = d.id === item.dishId
-                                    const cost = d.dish_ingredients?.reduce((sum, di) => {
-                                      return sum + Number(di.ingredients?.cost_per_unit || 0) * Number(di.quantity || 0)
-                                    }, 0) || 0
-                                    return (
-                                      <button
-                                        key={d.id}
-                                        type="button"
-                                        onClick={() => {
-                                          updateDishRow(idx, 'dishId', d.id)
-                                          setActiveDropdown(null)
-                                        }}
-                                        className={`w-full text-right px-3 py-2 text-xs rounded-lg transition-colors cursor-pointer flex justify-between items-center ${isSelected
-                                            ? 'bg-amber-500/10 text-amber-400 font-black'
-                                            : 'text-zinc-300 hover:bg-zinc-900/60'
-                                          }`}
-                                      >
-                                        <span>{d.name}</span>
-                                        <span className="text-xxs text-zinc-400 shrink-0 font-mono">
-                                          ₪{cost.toFixed(2)}
-                                        </span>
-                                      </button>
-                                    )
-                                  })
+
+                                  // אותו סדר קטגוריות של מעקב ההכנה ושל סיכום הלקוח.
+                                  const grouped = groupByDishCategory(filteredOptions, (d) => d.category)
+
+                                  return grouped.map((g) => (
+                                    <div key={g.cat} className="space-y-1">
+                                      <span className="block text-[10px] font-black text-amber-500/80 px-2 py-0.5 bg-zinc-900/40 rounded border border-zinc-900/30">
+                                        {g.cat}
+                                      </span>
+                                      {g.items.map((d) => {
+                                        const isSelected = d.id === item.dishId
+                                        const cost = d.dish_ingredients?.reduce((sum, di) => {
+                                          return sum + Number(di.ingredients?.cost_per_unit || 0) * Number(di.quantity || 0)
+                                        }, 0) || 0
+                                        return (
+                                          <button
+                                            key={d.id}
+                                            type="button"
+                                            onClick={() => {
+                                              updateDishRow(idx, 'dishId', d.id)
+                                              setActiveDropdown(null)
+                                            }}
+                                            className={`w-full text-right px-3 py-2 text-xs rounded-lg transition-colors cursor-pointer flex justify-between items-center ${isSelected
+                                                ? 'bg-amber-500/10 text-amber-400 font-black'
+                                                : 'text-zinc-300 hover:bg-zinc-900/60'
+                                              }`}
+                                          >
+                                            <span>{d.name}</span>
+                                            <span className="text-xxs text-zinc-400 shrink-0 font-mono">
+                                              ₪{cost.toFixed(2)}
+                                            </span>
+                                          </button>
+                                        )
+                                      })}
+                                    </div>
+                                  ))
                                 })()}
                             </div>
                           </AnchoredDropdown>
@@ -1194,7 +1223,36 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                       )}
                     </div>
                   )
-                })
+                }
+
+                // השורות עצמן מקובצות באותן קטגוריות של הבורר, כדי ששיוך של
+                // הזמנה קיימת ייקרא באותו סדר שבו היא מוגשת ומודפסת.
+                const rows = selectedDishes.map((item, idx) => ({ item, idx }))
+                const chosen = rows.filter(({ item }) => item.dishId)
+                const pending = rows.filter(({ item }) => !item.dishId)
+
+                const grouped = groupByDishCategory(
+                  chosen,
+                  ({ item }) => dishesList.find((d) => d.id === item.dishId)?.category
+                )
+                // שורות שעוד לא נבחרה בהן מנה יורדות לסוף — אין להן קטגוריה להיכנס אליה.
+                if (pending.length > 0) grouped.push({ cat: 'טרם נבחרה מנה', items: pending })
+
+                if (grouped.length === 0) {
+                  return <p className="text-zinc-600 text-xs py-2 text-center">טרם נבחרו מנות להזמנה זו.</p>
+                }
+
+                return grouped.map((g) => (
+                  <div key={g.cat} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xxs font-extrabold uppercase tracking-wider text-zinc-500">{g.cat}</h3>
+                      <span className="text-[10px] font-mono text-zinc-500">{g.items.length}</span>
+                    </div>
+                    <div className="space-y-3">
+                      {g.items.map(({ item, idx }) => renderRow(item, idx))}
+                    </div>
+                  </div>
+                ))
               })()}
             </div>
 
