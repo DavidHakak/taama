@@ -5,7 +5,7 @@ import { shopOrders, shopOrderItems, shopProducts, profiles, shopCoupons, shopPr
 import { createClient } from '@/utils/supabase/server'
 import { eq, and, or, isNull, gte, sql, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
-import { getStaffSubscriptions, sendToSubscriptions } from '@/utils/push'
+import { getSubscriptionsForTopic, sendToSubscriptions } from '@/utils/push'
 
 interface OrderPayloadItem {
   productId: string
@@ -346,18 +346,18 @@ export async function placeOrder(
     // 4. Invalidate layout caches to update availability instantly
     revalidatePath('/')
 
-    // 5. Tell the staff an order came in.
+    // 5. Tell the admins an order came in, and confirm it to the customer.
     //
     // The order is already committed at this point, so a push failure must
     // never turn a successful order into an error for the customer — hence the
-    // catch that only logs. Staff only: getCustomerSubscriptions() would also
-    // reach shop customers, who share the push_subscriptions table.
+    // catch that only logs. Both sends are addressed by topic, so neither one
+    // can reach the rest of the customer base.
     try {
-      const subscriptions = await getStaffSubscriptions()
       const customerName = profile?.fullName?.trim() || user.email || 'לקוח'
       const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
 
-      await sendToSubscriptions(subscriptions, {
+      const adminSubscriptions = await getSubscriptionsForTopic('new_order')
+      await sendToSubscriptions(adminSubscriptions, {
         title: 'הזמנה חדשה בחנות',
         body: `${customerName} · ${itemCount} פריטים · ₪${placedOrder.total.toFixed(2)} · ${event.name}`,
         url: '/shop-admin/orders',
@@ -366,8 +366,17 @@ export async function placeOrder(
         // notification for the first one before it has been read.
         tag: `taama-shop-order-${placedOrder.id}`,
       })
+
+      const customerSubscriptions = await getSubscriptionsForTopic('order_confirmation', user.id)
+      await sendToSubscriptions(customerSubscriptions, {
+        title: 'ההזמנה שלך התקבלה',
+        body: `${itemCount} פריטים · ₪${placedOrder.total.toFixed(2)} · ${event.name}`,
+        url: '/my-account',
+        actionTitle: 'צפה בהזמנה',
+        tag: `taama-order-confirmation-${placedOrder.id}`,
+      })
     } catch (pushErr) {
-      console.error('Order placed but staff push notification failed:', pushErr)
+      console.error('Order placed but push notification failed:', pushErr)
     }
 
     return { success: true, orderId: placedOrder.id }

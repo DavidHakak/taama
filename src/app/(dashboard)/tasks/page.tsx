@@ -25,9 +25,11 @@ import {
   GripVertical,
   ArrowUp,
   ArrowDown,
+  BellRing,
 } from 'lucide-react'
 import { CustomSelect } from '@/components/ui/CustomSelect'
 import { PushToggle } from '@/components/PushToggle'
+import { NotificationPreferences } from '@/components/NotificationPreferences'
 import { useCustomDialogs } from '@/hooks/useCustomDialogs'
 
 /* -------------------------------------------------------------------------- */
@@ -295,6 +297,9 @@ export default function TasksPage() {
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  /** The notification list is folded away; the tasks are what this page is for. */
+  const [showNotificationPrefs, setShowNotificationPrefs] = useState(false)
 
   const [categories, setCategories] = useState<TaskCategory[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
@@ -845,6 +850,24 @@ export default function TasksPage() {
           {error}
         </div>
       )}
+
+      {/* Which notifications this staff member receives */}
+      <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-3 space-y-2">
+        <button
+          type="button"
+          onClick={() => setShowNotificationPrefs((v) => !v)}
+          className="flex items-center gap-2 text-xs font-bold text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+        >
+          <BellRing className="h-4 w-4 text-amber-500" />
+          אילו התראות לקבל
+        </button>
+        {showNotificationPrefs && (
+          <NotificationPreferences
+            onError={(m) => showAlert(m, 'התראות', 'error')}
+            onInfo={(m) => showAlert(m, 'התראות', 'success')}
+          />
+        )}
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">

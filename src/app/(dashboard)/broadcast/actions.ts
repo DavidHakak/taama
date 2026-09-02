@@ -4,7 +4,7 @@ import { db } from '@/db'
 import { profiles } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { createClient as createSupabaseServerClient } from '@/utils/supabase/server'
-import { getCustomerSubscriptions, sendToSubscriptions } from '@/utils/push'
+import { getSubscriptionsForTopic, sendToSubscriptions } from '@/utils/push'
 
 export interface BroadcastInput {
   title: string
@@ -62,7 +62,7 @@ export async function sendCustomBroadcast(input: BroadcastInput) {
     if (body.length > 300) return { success: false, error: 'התוכן ארוך מדי (עד 300 תווים)' }
     if (ctaLabel.length > 24) return { success: false, error: 'טקסט הכפתור ארוך מדי (עד 24 תווים)' }
 
-    const subscriptions = await getCustomerSubscriptions()
+    const subscriptions = await getSubscriptionsForTopic('broadcast')
     if (subscriptions.length === 0) {
       return { success: false, error: 'אין לקוחות שהפעילו התראות' }
     }
