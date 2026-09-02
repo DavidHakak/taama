@@ -3,16 +3,12 @@ import { notFound } from 'next/navigation'
 import { eq } from 'drizzle-orm'
 import { db } from '@/db'
 import { brands } from '@/db/schema'
+import { STOREFRONT_BRAND_SLUG } from './brand-constants'
+
+export { STOREFRONT_BRAND_SLUG }
 
 export type Brand = typeof brands.$inferSelect
 
-/**
- * המותג שהחנות הציבורית מגישה כרגע.
- *
- * זמני ובכוונה: כשיהיו שני דומיינים, המותג ייגזר מה-Host ב-proxy.ts
- * ולא מקבוע. עד אז זו נקודה אחת לשנות, במקום תנאי מפוזרים.
- */
-export const STOREFRONT_BRAND_SLUG = 'taama'
 
 /**
  * שולף מותג לפי ה-slug שבנתיב. cache() לכל בקשה, כדי שעמוד שקורא

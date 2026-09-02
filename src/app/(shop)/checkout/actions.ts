@@ -34,10 +34,42 @@ const toAgorot = (value: number) => Math.round(value * 100)
 
 const variantKey = (productId: string, sizeType: string) => `${productId}|${sizeType}`
 
+/** Who collects the order. Both fields are mandatory — the pickup depends on them. */
+export interface RecipientDetails {
+  fullName: string
+  phone: string
+}
+
+/**
+ * An Israeli number, once separators are stripped: 0 followed by 8 digits for a
+ * landline (0X-XXXXXXX) or 9 for a mobile (05X-XXXXXXX).
+ */
+const digitsOnlyPhone = (phone: string) => phone.replace(/[\s\-().]/g, '')
+const PHONE_PATTERN = /^0\d{8,9}$/
+
+/**
+ * Validates the recipient the browser sent, returning the values to store.
+ * Shared by the client so both sides reject the same input.
+ */
+function validateRecipient(recipient: RecipientDetails | undefined) {
+  const fullName = (recipient?.fullName ?? '').trim()
+  const phone = digitsOnlyPhone(recipient?.phone ?? '')
+
+  if (fullName.length < 2) {
+    return { error: 'יש למלא את שם מקבל ההזמנה (לפחות 2 תווים)' as const }
+  }
+  if (!PHONE_PATTERN.test(phone)) {
+    return { error: 'יש למלא מספר טלפון תקין של מקבל ההזמנה (לדוגמה 050-1234567)' as const }
+  }
+
+  return { fullName, phone }
+}
+
 export async function placeOrder(
   eventId: string,
   items: OrderPayloadItem[],
   totalPrice: number,
+  recipient: RecipientDetails,
   couponCode?: string
 ) {
   try {
@@ -52,13 +84,21 @@ export async function placeOrder(
 
     // 2. Verify if user is blocked
     const [profile] = await db
-      .select({ isBlocked: profiles.is_blocked, fullName: profiles.full_name })
+      .select({ isBlocked: profiles.is_blocked })
       .from(profiles)
       .where(eq(profiles.id, user.id))
       .limit(1)
 
     if (profile && profile.isBlocked) {
       return { success: false, error: 'חשבונך מושהה מביצוע הזמנות. אנא צור קשר עם שירות הלקוחות.' }
+    }
+
+    // 2.1 The recipient is who we hand the order to at pickup, and the number we
+    // call when something is wrong with it — an order without them is useless,
+    // so it is checked here too and not only in the form.
+    const validatedRecipient = validateRecipient(recipient)
+    if ('error' in validatedRecipient) {
+      return { success: false, error: validatedRecipient.error }
     }
 
     if (!items || items.length === 0) {
@@ -320,6 +360,9 @@ export async function placeOrder(
         .values({
           user_id: user.id,
           event_id: eventId,
+          // בלי זה ההזמנה נשמרת עם brand_id = NULL ונעלמת מהדשבורד,
+          // שמסנן לפי מותג. הלקוח מקבל אישור והמנהל לא רואה כלום.
+          brand_id: brand.id,
           status: 'New',
           // toFixed(2) rather than toString(): a percentage coupon leaves values
           // like 223.49700000000001, and the raw string would be silently
@@ -345,17 +388,32 @@ export async function placeOrder(
       return { id: newOrder.id, total: finalTotalPrice }
     })
 
-    // 4. Invalidate layout caches to update availability instantly
+    // 4. Keep the profile in step with what the customer just confirmed, so the
+    // next checkout is prefilled with the details this order was placed under.
+    // The order is already committed — a failure here must not undo it.
+    try {
+      await db
+        .update(profiles)
+        .set({
+          full_name: validatedRecipient.fullName,
+          phone: validatedRecipient.phone,
+        })
+        .where(eq(profiles.id, user.id))
+    } catch (profileErr) {
+      console.error('Order placed but saving recipient details failed:', profileErr)
+    }
+
+    // 5. Invalidate layout caches to update availability instantly
     revalidatePath('/')
 
-    // 5. Tell the admins an order came in, and confirm it to the customer.
+    // 6. Tell the admins an order came in, and confirm it to the customer.
     //
     // The order is already committed at this point, so a push failure must
     // never turn a successful order into an error for the customer — hence the
     // catch that only logs. Both sends are addressed by topic, so neither one
     // can reach the rest of the customer base.
     try {
-      const customerName = profile?.fullName?.trim() || user.email || 'לקוח'
+      const customerName = validatedRecipient.fullName
       const itemCount = items.reduce((sum, item) => sum + item.quantity, 0)
 
       const adminSubscriptions = await getSubscriptionsForTopic('new_order')

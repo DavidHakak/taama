@@ -6,9 +6,11 @@ import { eq, and, not, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { createClient as createSupabaseServerClient } from '@/utils/supabase/server'
 import { getSubscriptionsForTopic, sendToSubscriptions } from '@/utils/push'
+import { resolveBrand } from '@/lib/brand'
 
 // --- Shop Products CRUD ---
 export async function createShopProduct(data: {
+  brandSlug: string
   name: string
   category: string
   announcementText: string | null
@@ -21,11 +23,17 @@ export async function createShopProduct(data: {
   }[]
 }) {
   try {
+  // brandSlug חובה ולא אופציונלי: brand_id הוא nullable ב-DB, ולכן
+  // שכחה הייתה יוצרת רשומה יתומה בשקט — נשמרת בהצלחה ואז לא מופיעה
+  // בשום מסך. TypeScript הופך את זה לשגיאת קומפילציה.
+    const brand = await resolveBrand(data.brandSlug)
+
     await db.transaction(async (tx) => {
       // 1. Insert product
       const [product] = await tx
         .insert(shopProducts)
         .values({
+          brand_id: brand.id,
           name: data.name,
           category: data.category,
           announcement_text: data.announcementText,
@@ -169,12 +177,22 @@ export async function deleteShopProduct(id: string) {
 }
 
 // --- Shop Events CRUD ---
-export async function createShopEvent(data: { name: string; pickupDate: string; isActive: boolean; isSpecial?: boolean }) {
+export async function createShopEvent(data: {
+  name: string
+  pickupDate: string
+  isActive: boolean
+  isSpecial?: boolean
+  brandSlug: string
+}) {
   try {
     const todayStr = new Date().toLocaleDateString('en-CA')
     if (data.pickupDate < todayStr) {
       return { success: false, error: 'לא ניתן לפתוח אירוע על תאריך שעבר' }
     }
+
+    // בלי brand_id האירוע נוצר "יתום": החזית והדשבורד שניהם מסננים לפי מותג,
+    // כך שאירוע כזה נשמר בהצלחה ואז פשוט לא מופיע בשום מקום.
+    const brand = await resolveBrand(data.brandSlug)
 
     const isEventSpecial = !!data.isSpecial
     const shouldBeActive = isEventSpecial ? false : data.isActive
@@ -185,6 +203,7 @@ export async function createShopEvent(data: { name: string; pickupDate: string; 
         pickup_date: data.pickupDate,
         is_active: shouldBeActive,
         is_special: isEventSpecial,
+        brand_id: brand.id,
       })
     })
     revalidatePath('/')
@@ -206,6 +225,18 @@ export async function duplicateShopEvent(eventId: string, name: string, pickupDa
     const isEventSpecial = !!isSpecial
     const shouldBeActive = isEventSpecial ? false : true
 
+    // השכפול יורש את המותג של אירוע המקור — אחרת העותק היה נוצר בלי מותג
+    // ונעלם מהחזית ומהדשבורד גם יחד.
+    const [source] = await db
+      .select({ brandId: shopEvents.brand_id })
+      .from(shopEvents)
+      .where(eq(shopEvents.id, eventId))
+      .limit(1)
+
+    if (!source) {
+      return { success: false, error: 'אירוע המקור לא נמצא' }
+    }
+
     await db.transaction(async (tx) => {
       // 1. Insert new event
       await tx
@@ -215,6 +246,7 @@ export async function duplicateShopEvent(eventId: string, name: string, pickupDa
           pickup_date: pickupDate,
           is_active: shouldBeActive,
           is_special: isEventSpecial,
+          brand_id: source.brandId,
         })
     })
     revalidatePath('/')
@@ -381,6 +413,7 @@ export async function toggleUserBlock(userId: string, isBlocked: boolean) {
 
 // --- Shop Promotions CRUD ---
 export async function createShopPromotion(data: {
+  brandSlug: string
   name: string
   category: string
   packageQty: number
@@ -389,7 +422,9 @@ export async function createShopPromotion(data: {
   sizeType: string | null
 }) {
   try {
+    const brand = await resolveBrand(data.brandSlug)
     await db.insert(shopPromotions).values({
+      brand_id: brand.id,
       name: data.name,
       category: data.category,
       package_qty: data.packageQty,
@@ -464,6 +499,7 @@ export async function deleteShopPromotion(id: string) {
 
 // --- Shop Coupons CRUD ---
 export async function createShopCoupon(data: {
+  brandSlug: string
   code: string
   discountType: string
   discountValue: number
@@ -473,7 +509,9 @@ export async function createShopCoupon(data: {
   isActive: boolean
 }) {
   try {
+    const brand = await resolveBrand(data.brandSlug)
     await db.insert(shopCoupons).values({
+      brand_id: brand.id,
       code: data.code.trim().toUpperCase(),
       discount_type: data.discountType,
       discount_value: data.discountValue.toString(),
@@ -770,57 +808,41 @@ export async function deleteShopOrder(orderId: string) {
   }
 }
 
-export async function saveStoreSettings(address: string, hours: string, cutoffHours: number, phone: string, email: string, sizes?: string) {
+export async function saveStoreSettings(
+  brandSlug: string,
+  address: string,
+  hours: string,
+  cutoffHours: number,
+  phone: string,
+  email: string,
+  sizes?: string
+) {
   try {
+    // ההגדרות הן פר מותג: כתובת האיסוף של טעמא אינה של שמנת מתוקה.
+    // בלי brandSlug השמירה הייתה דורסת הגדרות של המותג השני, או
+    // יוצרת שורה יתומה שאף חנות לא קוראת.
+    const brand = await resolveBrand(brandSlug)
+
+    // שישה בלוקים כמעט זהים הוחלפו בלולאה. חזרתיות כזו היא בדיוק
+    // המקום שבו נשכח תנאי מותג באחד מהם ואיש לא ישים לב.
+    const entries: [string, string][] = [
+      ['pickup_address', address],
+      ['pickup_hours', hours],
+      ['cutoff_hours', cutoffHours.toString()],
+      ['pickup_phone', phone],
+      ['pickup_email', email],
+      ...(sizes !== undefined ? [['available_sizes', sizes] as [string, string]] : []),
+    ]
+
     await db.transaction(async (tx) => {
-      // 1. Save pickup_address
-      const [addr] = await tx.select().from(storeSettings).where(eq(storeSettings.key, 'pickup_address')).limit(1)
-      if (addr) {
-        await tx.update(storeSettings).set({ value: address }).where(eq(storeSettings.key, 'pickup_address'))
-      } else {
-        await tx.insert(storeSettings).values({ key: 'pickup_address', value: address })
-      }
+      for (const [key, value] of entries) {
+        const scope = and(eq(storeSettings.key, key), eq(storeSettings.brand_id, brand.id))
+        const [existing] = await tx.select().from(storeSettings).where(scope).limit(1)
 
-      // 2. Save pickup_hours
-      const [hrs] = await tx.select().from(storeSettings).where(eq(storeSettings.key, 'pickup_hours')).limit(1)
-      if (hrs) {
-        await tx.update(storeSettings).set({ value: hours }).where(eq(storeSettings.key, 'pickup_hours'))
-      } else {
-        await tx.insert(storeSettings).values({ key: 'pickup_hours', value: hours })
-      }
-
-      // 3. Save cutoff_hours
-      const [cutoff] = await tx.select().from(storeSettings).where(eq(storeSettings.key, 'cutoff_hours')).limit(1)
-      const cutoffStr = cutoffHours.toString()
-      if (cutoff) {
-        await tx.update(storeSettings).set({ value: cutoffStr }).where(eq(storeSettings.key, 'cutoff_hours'))
-      } else {
-        await tx.insert(storeSettings).values({ key: 'cutoff_hours', value: cutoffStr })
-      }
-
-      // 4. Save pickup_phone
-      const [phn] = await tx.select().from(storeSettings).where(eq(storeSettings.key, 'pickup_phone')).limit(1)
-      if (phn) {
-        await tx.update(storeSettings).set({ value: phone }).where(eq(storeSettings.key, 'pickup_phone'))
-      } else {
-        await tx.insert(storeSettings).values({ key: 'pickup_phone', value: phone })
-      }
-
-      // 5. Save pickup_email
-      const [eml] = await tx.select().from(storeSettings).where(eq(storeSettings.key, 'pickup_email')).limit(1)
-      if (eml) {
-        await tx.update(storeSettings).set({ value: email }).where(eq(storeSettings.key, 'pickup_email'))
-      } else {
-        await tx.insert(storeSettings).values({ key: 'pickup_email', value: email })
-      }
-
-      // 6. Save available_sizes
-      if (sizes !== undefined) {
-        const [sz] = await tx.select().from(storeSettings).where(eq(storeSettings.key, 'available_sizes')).limit(1)
-        if (sz) {
-          await tx.update(storeSettings).set({ value: sizes }).where(eq(storeSettings.key, 'available_sizes'))
+        if (existing) {
+          await tx.update(storeSettings).set({ value }).where(scope)
         } else {
-          await tx.insert(storeSettings).values({ key: 'available_sizes', value: sizes })
+          await tx.insert(storeSettings).values({ key, value, brand_id: brand.id })
         }
       }
     })

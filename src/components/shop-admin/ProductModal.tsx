@@ -9,6 +9,8 @@ import { Ingredient, Product, ProductIngredient, CATEGORIES, INGREDIENT_CATEGORI
 import { useAdminPage } from './AdminPageClient'
 
 interface ProductModalProps {
+  /** ה-slug שבנתיב, נשלח לפעולת היצירה. */
+  brandSlug: string
   isOpen: boolean
   onClose: () => void
   mode: 'create' | 'edit'
@@ -27,6 +29,7 @@ interface FormVariant {
 }
 
 export default function ProductModal({
+  brandSlug,
   isOpen,
   onClose,
   mode,
@@ -202,6 +205,7 @@ export default function ProductModal({
       let res
       if (mode === 'create') {
         res = await createShopProduct({
+          brandSlug,
           name: prodName.trim(),
           category: prodCategory,
           announcementText: prodAnnouncement.trim() || null,

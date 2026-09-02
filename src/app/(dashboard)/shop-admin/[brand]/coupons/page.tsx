@@ -36,6 +36,7 @@ export default async function ShopCouponsPage({
       icon={<Gift className="h-6 w-6 text-amber-500" />}
     >
       <CouponsTab
+        brandSlug={brand.slug}
         coupons={coupons}
       />
     </AdminPageClient>

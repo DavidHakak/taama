@@ -9,6 +9,8 @@ import ProductModal from './ProductModal'
 import { useAdminPage } from './AdminPageClient'
 
 interface ProductsTabProps {
+  /** ה-slug שבנתיב. נשלח לכל יצירה כדי שהרשומה תיווצר תחת המותג הנכון. */
+  brandSlug: string
   products: Product[]
   ingredientsList: Ingredient[]
   dynamicSizeTypes: string[]
@@ -16,6 +18,7 @@ interface ProductsTabProps {
 }
 
 export default function ProductsTab({
+  brandSlug,
   products,
   ingredientsList,
   dynamicSizeTypes,
@@ -321,6 +324,7 @@ export default function ProductsTab({
       </div>
 
       <ProductModal
+        brandSlug={brandSlug}
         isOpen={isProductModalOpen}
         onClose={() => setIsProductModalOpen(false)}
         mode={productModalMode}

@@ -99,6 +99,7 @@ export interface Coupon {
 }
 
 export interface ShopAdminClientProps {
+  brandSlug: string
   ingredientsList: Ingredient[]
   products: Product[]
   events: Event[]

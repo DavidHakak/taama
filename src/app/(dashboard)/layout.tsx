@@ -30,6 +30,9 @@ import {
   Megaphone,
 } from 'lucide-react'
 import React from 'react'
+// מ-brand-constants ולא מ-brand: האחרון מייבא את חיבור ה-DB,
+// וקובץ הזה הוא client component.
+import { STOREFRONT_BRAND_SLUG } from '@/lib/brand-constants'
 
 export default function DashboardLayout({
   children,
@@ -173,14 +176,20 @@ export default function DashboardLayout({
     { name: 'רכיבים ומלאי', href: '/ingredients', icon: Beef },
   ]
 
+  // המותג יושב בנתיב, ולכן קישורי הסייד-בר צריכים לשמר את המותג שאתה
+  // נמצא בו — אחרת מעבר בין מסכים היה מחזיר אותך בשקט לטעמא.
+  const activeBrandSlug =
+    pathname.match(/^\/shop-admin\/([^/]+)/)?.[1] ?? STOREFRONT_BRAND_SLUG
+
   const shabbatItems = [
-    { name: 'הזמנות חנות', href: '/shop-admin/orders', icon: ShoppingBag },
-    { name: 'ניהול מוצרים', href: '/shop-admin/products', icon: Tag },
-    { name: 'ניהול מבצעים', href: '/shop-admin/promotions', icon: Percent },
-    { name: 'קודי קופון', href: '/shop-admin/coupons', icon: Gift },
-    { name: 'אירועי מכירה', href: '/shop-admin/events', icon: Calendar },
+    { name: 'הזמנות חנות', href: `/shop-admin/${activeBrandSlug}/orders`, icon: ShoppingBag },
+    { name: 'ניהול מוצרים', href: `/shop-admin/${activeBrandSlug}/products`, icon: Tag },
+    { name: 'ניהול מבצעים', href: `/shop-admin/${activeBrandSlug}/promotions`, icon: Percent },
+    { name: 'קודי קופון', href: `/shop-admin/${activeBrandSlug}/coupons`, icon: Gift },
+    { name: 'אירועי מכירה', href: `/shop-admin/${activeBrandSlug}/events`, icon: Calendar },
+    // לקוחות אינו תחת מותג: חשבון הלקוח משותף לשני המותגים.
     { name: 'ניהול לקוחות', href: '/shop-admin/customers', icon: Users },
-    { name: 'הגדרות חנות', href: '/shop-admin/settings', icon: Settings },
+    { name: 'הגדרות חנות', href: `/shop-admin/${activeBrandSlug}/settings`, icon: Settings },
   ]
 
   const procurementItems = [

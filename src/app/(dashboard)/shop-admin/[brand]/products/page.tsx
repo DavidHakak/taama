@@ -106,6 +106,7 @@ export default async function ShopProductsPage({
       icon={<Tag className="h-6 w-6 text-amber-500" />}
     >
       <ProductsTab
+        brandSlug={brand.slug}
         products={products}
         ingredientsList={ingredientsList}
         dynamicSizeTypes={dynamicSizeTypes}

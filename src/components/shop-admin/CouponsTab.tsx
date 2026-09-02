@@ -9,11 +9,14 @@ import CouponModal from './CouponModal'
 import { useAdminPage } from './AdminPageClient'
 
 interface CouponsTabProps {
+  /** ה-slug שבנתיב. נשלח לכל יצירה כדי שהרשומה תיווצר תחת המותג הנכון. */
+  brandSlug: string
   coupons: Coupon[]
   setGlobalLoading?: (loading: boolean) => void
 }
 
 export default function CouponsTab({
+  brandSlug,
   coupons,
   setGlobalLoading: propSetGlobalLoading,
 }: CouponsTabProps) {
@@ -150,6 +153,7 @@ export default function CouponsTab({
       </div>
 
       <CouponModal
+        brandSlug={brandSlug}
         isOpen={isCouponModalOpen}
         onClose={() => setIsCouponModalOpen(false)}
         mode={couponModalMode}

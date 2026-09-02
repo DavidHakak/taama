@@ -23,6 +23,7 @@ import CustomersTab from './shop-admin/CustomersTab'
 import SettingsTab from './shop-admin/SettingsTab'
 
 export default function ShopAdminClient({
+  brandSlug,
   ingredientsList,
   products,
   events,
@@ -86,6 +87,7 @@ export default function ShopAdminClient({
       {/* 3. Tab Content */}
       {activeTab === 'products' && (
         <ProductsTab
+          brandSlug={brandSlug}
           products={products}
           ingredientsList={ingredientsList}
           dynamicSizeTypes={dynamicSizeTypes}
@@ -95,6 +97,7 @@ export default function ShopAdminClient({
 
       {activeTab === 'promotions' && (
         <PromotionsTab
+          brandSlug={brandSlug}
           promotions={promotions}
           dynamicSizeTypes={dynamicSizeTypes}
           setGlobalLoading={setLoading}
@@ -103,6 +106,7 @@ export default function ShopAdminClient({
 
       {activeTab === 'coupons' && (
         <CouponsTab
+          brandSlug={brandSlug}
           coupons={coupons}
           setGlobalLoading={setLoading}
         />
@@ -111,6 +115,7 @@ export default function ShopAdminClient({
       {activeTab === 'events' && (
         <EventsTab
           events={events}
+          brandSlug={brandSlug}
           setGlobalLoading={setLoading}
         />
       )}
@@ -136,6 +141,7 @@ export default function ShopAdminClient({
 
       {activeTab === 'settings' && (
         <SettingsTab
+          brandSlug={brandSlug}
           settings={settings}
           setGlobalLoading={setLoading}
         />

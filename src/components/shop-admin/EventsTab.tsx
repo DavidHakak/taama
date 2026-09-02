@@ -11,6 +11,8 @@ import { useAdminPage } from './AdminPageClient'
 
 interface EventsTabProps {
   events: Event[]
+  /** ה-slug שבנתיב. נשלח לכל יצירת אירוע כדי שהאירוע ייווצר תחת המותג הנכון. */
+  brandSlug: string
   setGlobalLoading?: (loading: boolean) => void
 }
 
@@ -21,6 +23,7 @@ interface CalendarRec {
 
 export default function EventsTab({
   events,
+  brandSlug,
   setGlobalLoading: propSetGlobalLoading,
 }: EventsTabProps) {
   const { setGlobalLoading: contextSetGlobalLoading, showAlert, showConfirm } = useAdminPage()
@@ -170,6 +173,7 @@ export default function EventsTab({
                           pickupDate: rec.date,
                           isActive: false,
                           isSpecial: true,
+                          brandSlug,
                         })
                         if (res.success) {
                           setRecMessage({
@@ -374,6 +378,7 @@ export default function EventsTab({
       <EventModal
         isOpen={isEventModalOpen}
         onClose={() => setIsEventModalOpen(false)}
+        brandSlug={brandSlug}
         setGlobalLoading={setGlobalLoading}
       />
 

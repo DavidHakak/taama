@@ -9,10 +9,12 @@ import { Event } from './types'
 interface EventModalProps {
   isOpen: boolean
   onClose: () => void
+  /** המותג שתחתיו ייווצר האירוע — נגזר מהנתיב בדשבורד. */
+  brandSlug: string
   setGlobalLoading: (loading: boolean) => void
 }
 
-export function EventModal({ isOpen, onClose, setGlobalLoading }: EventModalProps) {
+export function EventModal({ isOpen, onClose, brandSlug, setGlobalLoading }: EventModalProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
@@ -60,6 +62,7 @@ export function EventModal({ isOpen, onClose, setGlobalLoading }: EventModalProp
         pickupDate: eventDateInput,
         isActive: eventActiveInput,
         isSpecial: eventSpecialInput,
+        brandSlug,
       })
 
       if (res.success) {

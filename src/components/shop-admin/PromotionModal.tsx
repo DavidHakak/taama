@@ -8,6 +8,8 @@ import { useRouter } from 'next/navigation'
 import { Promotion, CATEGORIES } from './types'
 
 interface PromotionModalProps {
+  /** ה-slug שבנתיב, נשלח לפעולת היצירה. */
+  brandSlug: string
   isOpen: boolean
   onClose: () => void
   mode: 'create' | 'edit'
@@ -17,6 +19,7 @@ interface PromotionModalProps {
 }
 
 export default function PromotionModal({
+  brandSlug,
   isOpen,
   onClose,
   mode,
@@ -79,6 +82,7 @@ export default function PromotionModal({
       let res
       if (mode === 'create') {
         res = await createShopPromotion({
+          brandSlug,
           name: promoName.trim(),
           category: promoCategory,
           packageQty: qty,

@@ -43,6 +43,7 @@ export default async function ShopPromotionsPage({
       icon={<Percent className="h-6 w-6 text-amber-500" />}
     >
       <PromotionsTab
+        brandSlug={brand.slug}
         promotions={promotions}
         dynamicSizeTypes={dynamicSizeTypes}
       />

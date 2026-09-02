@@ -7,11 +7,14 @@ import { useRouter } from 'next/navigation'
 import { useAdminPage } from './AdminPageClient'
 
 interface SettingsTabProps {
+  /** ה-slug שבנתיב. נשלח לכל יצירה כדי שהרשומה תיווצר תחת המותג הנכון. */
+  brandSlug: string
   settings?: { key: string; value: string }[]
   setGlobalLoading?: (loading: boolean) => void
 }
 
 export default function SettingsTab({
+  brandSlug,
   settings,
   setGlobalLoading: propSetGlobalLoading,
 }: SettingsTabProps) {
@@ -54,7 +57,7 @@ export default function SettingsTab({
     }
 
     try {
-      const res = await saveStoreSettings(pickupAddress, pickupHours, cutoff, pickupPhone, pickupEmail, availableSizesInput)
+      const res = await saveStoreSettings(brandSlug, pickupAddress, pickupHours, cutoff, pickupPhone, pickupEmail, availableSizesInput)
       if (res.success) {
         showAlert('הגדרות החנות נשמרו בהצלחה', 'הצלחה', 'success')
         router.refresh()

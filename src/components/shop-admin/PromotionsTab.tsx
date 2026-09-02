@@ -9,12 +9,15 @@ import PromotionModal from './PromotionModal'
 import { useAdminPage } from './AdminPageClient'
 
 interface PromotionsTabProps {
+  /** ה-slug שבנתיב. נשלח לכל יצירה כדי שהרשומה תיווצר תחת המותג הנכון. */
+  brandSlug: string
   promotions: Promotion[]
   dynamicSizeTypes: string[]
   setGlobalLoading?: (loading: boolean) => void
 }
 
 export default function PromotionsTab({
+  brandSlug,
   promotions,
   dynamicSizeTypes,
   setGlobalLoading: propSetGlobalLoading,
@@ -137,6 +140,7 @@ export default function PromotionsTab({
       </div>
 
       <PromotionModal
+        brandSlug={brandSlug}
         isOpen={isPromoModalOpen}
         onClose={() => setIsPromoModalOpen(false)}
         mode={promoModalMode}

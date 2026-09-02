@@ -8,6 +8,8 @@ import { useRouter } from 'next/navigation'
 import { Coupon } from './types'
 
 interface CouponModalProps {
+  /** ה-slug שבנתיב, נשלח לפעולת היצירה. */
+  brandSlug: string
   isOpen: boolean
   onClose: () => void
   mode: 'create' | 'edit'
@@ -16,6 +18,7 @@ interface CouponModalProps {
 }
 
 export default function CouponModal({
+  brandSlug,
   isOpen,
   onClose,
   mode,
@@ -81,6 +84,7 @@ export default function CouponModal({
       let res
       if (mode === 'create') {
         res = await createShopCoupon({
+          brandSlug,
           code: cpCode.trim().toUpperCase(),
           discountType: cpDiscountType,
           discountValue: val,

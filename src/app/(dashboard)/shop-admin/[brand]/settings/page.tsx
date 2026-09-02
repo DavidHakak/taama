@@ -29,6 +29,7 @@ export default async function ShopSettingsPage({
       icon={<Settings className="h-6 w-6 text-amber-500" />}
     >
       <SettingsTab
+        brandSlug={brand.slug}
         settings={settingsListRaw}
       />
     </AdminPageClient>
