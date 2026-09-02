@@ -4,9 +4,9 @@ import React, { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { fetchUserOrders, getReorderProducts } from './actions'
 import { useCart } from '@/components/cart-context'
-import { User, ClipboardList, Calendar, Loader2, ArrowLeft, RotateCcw, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, MapPin, Clock, BellRing } from 'lucide-react'
-import { PushToggle } from '@/components/PushToggle'
-import { NotificationPreferences } from '@/components/NotificationPreferences'
+import { User, ClipboardList, Calendar, Loader2, ArrowLeft, RotateCcw, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, MapPin, Clock, BellRing, Settings2 } from 'lucide-react'
+import { NotificationsDrawer } from '@/components/NotificationsDrawer'
+import { usePushNotifications } from '@/hooks/usePushNotifications'
 import { useCustomDialogs } from '@/hooks/useCustomDialogs'
 
 interface OrderItem {
@@ -54,6 +54,17 @@ function AccountContent() {
 
   // Cancel order modal state
   const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null)
+
+  // Notifications live in a side drawer; the page only keeps the subscription
+  // state, so the prompt below and the switch inside the drawer agree.
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const push = usePushNotifications({
+    onError: (m) => showAlert(m, 'התראות', 'error'),
+    onInfo: (m) => showAlert(m, 'התראות', 'success'),
+  })
+
+  /** The prompt stays up until this device is actually subscribed. */
+  const showPushPrompt = push.ready && push.state !== 'on' && push.state !== 'unsupported'
 
   const showSuccess = searchParams.get('success') === 'true'
 
@@ -192,7 +203,58 @@ function AccountContent() {
           </h1>
           <p className="text-zinc-550 text-zinc-500 text-xs mt-1 font-medium">צפה בהיסטוריית הרכישות ושכפל הזמנות קודמות בלחיצת כפתור.</p>
         </div>
+
+        {/* Notifications drawer trigger — same control on mobile and desktop */}
+        <button
+          type="button"
+          onClick={() => setNotificationsOpen(true)}
+          className="relative self-start sm:self-auto shrink-0 inline-flex items-center gap-2 px-3 py-2 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 rounded-xl text-xs font-bold text-zinc-300 hover:text-white transition-all cursor-pointer"
+        >
+          <BellRing className="h-3.5 w-3.5 text-amber-500" />
+          <span>הגדרות התראות</span>
+          {showPushPrompt && (
+            <span className="absolute -top-1 -left-1 h-2.5 w-2.5 rounded-full bg-amber-500 border border-black" />
+          )}
+        </button>
       </div>
+
+      {/* Push opt-in prompt. Stays put until the customer approves. */}
+      {showPushPrompt && (
+        <div className="p-4 sm:p-5 bg-amber-500/10 border border-amber-500/20 rounded-xl sm:rounded-2xl flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+          <div className="flex items-start gap-3 flex-1">
+            <BellRing className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-bold text-xs sm:text-sm text-white">אל תפספסו את פתיחת ההזמנות</h3>
+              <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                {push.state === 'denied'
+                  ? 'ההתראות חסומות בהגדרות האתר בדפדפן. יש לאפשר אותן שם, ואז לחזור לכאן ולהפעיל.'
+                  : 'הפעילו התראות ותקבלו הודעה לנייד ברגע שנפתחת הזמנה חדשה לשבת או לחג.'}
+              </p>
+            </div>
+          </div>
+
+          {push.state === 'denied' ? (
+            <button
+              type="button"
+              onClick={() => setNotificationsOpen(true)}
+              className="shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-300 hover:text-white font-bold rounded-xl text-xs transition-all cursor-pointer"
+            >
+              <Settings2 className="h-4 w-4 text-amber-500" />
+              פתח הגדרות התראות
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={push.enable}
+              disabled={push.busy}
+              className="shrink-0 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-yellow-600 to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-pure-white font-black rounded-xl text-xs shadow-md transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {push.busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <BellRing className="h-4 w-4" />}
+              הפעל התראות
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Checkout Success Banner */}
       {showSuccess && (
@@ -227,35 +289,13 @@ function AccountContent() {
         </div>
       )}
 
-      {/* Push notifications: the device switch, then what that device receives */}
-      <div className="p-4 sm:p-5 bg-zinc-950 border border-zinc-900 rounded-xl sm:rounded-2xl space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <BellRing className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
-            <div>
-              <h3 className="font-bold text-xs sm:text-sm text-white">התראות לנייד</h3>
-              <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                קבלו הודעה לנייד ברגע שנפתחת הזמנה חדשה לשבת או לחג.
-                ההפעלה נשמרת לכל מכשיר בנפרד וניתן לכבות אותה בכל רגע.
-              </p>
-            </div>
-          </div>
-          <div className="shrink-0">
-            <PushToggle
-              onError={(m) => showAlert(m, 'התראות', 'error')}
-              onInfo={(m) => showAlert(m, 'התראות', 'success')}
-            />
-          </div>
-        </div>
-
-        <div className="pt-3 border-t border-zinc-900">
-          <p className="text-xs font-bold text-zinc-400 mb-2">אילו התראות לקבל</p>
-          <NotificationPreferences
-            onError={(m) => showAlert(m, 'התראות', 'error')}
-            onInfo={(m) => showAlert(m, 'התראות', 'success')}
-          />
-        </div>
-      </div>
+      <NotificationsDrawer
+        open={notificationsOpen}
+        onClose={() => setNotificationsOpen(false)}
+        push={push}
+        onError={(m) => showAlert(m, 'התראות', 'error')}
+        onInfo={(m) => showAlert(m, 'התראות', 'success')}
+      />
 
       <CustomDialogs />
 
