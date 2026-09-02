@@ -6,6 +6,7 @@ import { fetchUserOrders, getReorderProducts } from './actions'
 import { useCart } from '@/components/cart-context'
 import { User, ClipboardList, Calendar, Loader2, ArrowLeft, RotateCcw, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, MapPin, Clock, BellRing } from 'lucide-react'
 import { PushToggle } from '@/components/PushToggle'
+import { NotificationPreferences } from '@/components/NotificationPreferences'
 import { useCustomDialogs } from '@/hooks/useCustomDialogs'
 
 interface OrderItem {
@@ -226,20 +227,30 @@ function AccountContent() {
         </div>
       )}
 
-      {/* Push notification preference (per device) */}
-      <div className="p-4 sm:p-5 bg-zinc-950 border border-zinc-900 rounded-xl sm:rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <BellRing className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
-          <div>
-            <h3 className="font-bold text-xs sm:text-sm text-white">התראות על פתיחת הזמנות</h3>
-            <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-              קבלו הודעה לנייד ברגע שנפתחת הזמנה חדשה לשבת או לחג.
-              ההגדרה נשמרת לכל מכשיר בנפרד וניתן לכבות אותה בכל רגע.
-            </p>
+      {/* Push notifications: the device switch, then what that device receives */}
+      <div className="p-4 sm:p-5 bg-zinc-950 border border-zinc-900 rounded-xl sm:rounded-2xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <BellRing className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-bold text-xs sm:text-sm text-white">התראות לנייד</h3>
+              <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                קבלו הודעה לנייד ברגע שנפתחת הזמנה חדשה לשבת או לחג.
+                ההפעלה נשמרת לכל מכשיר בנפרד וניתן לכבות אותה בכל רגע.
+              </p>
+            </div>
+          </div>
+          <div className="shrink-0">
+            <PushToggle
+              onError={(m) => showAlert(m, 'התראות', 'error')}
+              onInfo={(m) => showAlert(m, 'התראות', 'success')}
+            />
           </div>
         </div>
-        <div className="shrink-0">
-          <PushToggle
+
+        <div className="pt-3 border-t border-zinc-900">
+          <p className="text-xs font-bold text-zinc-400 mb-2">אילו התראות לקבל</p>
+          <NotificationPreferences
             onError={(m) => showAlert(m, 'התראות', 'error')}
             onInfo={(m) => showAlert(m, 'התראות', 'success')}
           />

@@ -5,7 +5,7 @@ import { shopProducts, shopEvents, shopOrders, profiles, shopProductIngredients,
 import { eq, and, not, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { createClient as createSupabaseServerClient } from '@/utils/supabase/server'
-import { getCustomerSubscriptions, sendToSubscriptions } from '@/utils/push'
+import { getSubscriptionsForTopic, sendToSubscriptions } from '@/utils/push'
 
 // --- Shop Products CRUD ---
 export async function createShopProduct(data: {
@@ -298,7 +298,7 @@ export async function sendEventAnnouncement(eventId: string) {
       }
     }
 
-    const subscriptions = await getCustomerSubscriptions()
+    const subscriptions = await getSubscriptionsForTopic('event_opened')
     if (subscriptions.length === 0) {
       return { success: false, error: 'אין לקוחות שהפעילו התראות' }
     }

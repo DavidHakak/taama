@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/db'
 import { tasks, taskCategories } from '@/db/schema'
 import { and, eq, isNotNull, lte, ne } from 'drizzle-orm'
-import { getStaffSubscriptions, sendToSubscriptions } from '@/utils/push'
+import { getSubscriptionsForTopic, sendToSubscriptions } from '@/utils/push'
 
 export const dynamic = 'force-dynamic'
 
@@ -98,7 +98,7 @@ async function handler(request: Request) {
         : 'יש משימות ממתינות'
 
     // Staff only — customers must not receive internal task reminders.
-    const subscriptions = await getStaffSubscriptions()
+    const subscriptions = await getSubscriptionsForTopic('task_reminder')
     const result = await sendToSubscriptions(subscriptions, {
       title,
       body,

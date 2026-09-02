@@ -1,7 +1,7 @@
 import webpush from 'web-push'
 import { db } from '@/db'
-import { profiles, pushSubscriptions } from '@/db/schema'
-import { and, eq, inArray, or } from 'drizzle-orm'
+import { notificationPreferences, profiles, pushSubscriptions } from '@/db/schema'
+import { and, eq, inArray, isNull, or, type SQL } from 'drizzle-orm'
 
 export interface PushPayload {
   title: string
@@ -100,18 +100,6 @@ export async function sendToSubscriptions(
   return { sent, failed, pruned: staleIds.length }
 }
 
-export async function getSubscriptionsForUser(userId: string) {
-  return db
-    .select({
-      id: pushSubscriptions.id,
-      endpoint: pushSubscriptions.endpoint,
-      p256dh: pushSubscriptions.p256dh,
-      auth: pushSubscriptions.auth,
-    })
-    .from(pushSubscriptions)
-    .where(eq(pushSubscriptions.user_id, userId))
-}
-
 const SUBSCRIPTION_COLUMNS = {
   id: pushSubscriptions.id,
   endpoint: pushSubscriptions.endpoint,
@@ -119,33 +107,131 @@ const SUBSCRIPTION_COLUMNS = {
   auth: pushSubscriptions.auth,
 }
 
-/**
- * Staff only: approved dashboard users and admins.
- *
- * Task reminders must never reach shop customers, who subscribe from their
- * personal area and share this same table.
- */
-export async function getStaffSubscriptions() {
+/** Every device of one user, with no topic filter — used by the test button. */
+export async function getSubscriptionsForUser(userId: string) {
   return db
     .select(SUBSCRIPTION_COLUMNS)
     .from(pushSubscriptions)
-    .innerJoin(profiles, eq(pushSubscriptions.user_id, profiles.id))
-    .where(
-      and(
-        eq(profiles.is_blocked, false),
-        or(eq(profiles.is_approved, true), eq(profiles.is_admin, true))
-      )
-    )
+    .where(eq(pushSubscriptions.user_id, userId))
 }
 
 /**
- * Everyone opted in who is not blocked — customers and staff alike.
- * Used for storefront announcements such as "a new event has opened".
+ * Who a given kind of notification is allowed to reach.
+ *
+ * - `everyone`  – every opted-in profile that is not blocked, customers included.
+ * - `staff`     – approved dashboard users and admins.
+ * - `admins`    – admins only.
+ * - `self`      – a single named user (the one the event happened to).
  */
-export async function getCustomerSubscriptions() {
+export type NotificationAudience = 'everyone' | 'staff' | 'admins' | 'self'
+
+export type NotificationTopic =
+  | 'event_opened'
+  | 'broadcast'
+  | 'order_confirmation'
+  | 'new_order'
+  | 'task_reminder'
+
+export interface NotificationTopicDefinition {
+  topic: NotificationTopic
+  audience: NotificationAudience
+  label: string
+  description: string
+}
+
+/**
+ * The single place that decides who receives what. Every send site names a
+ * topic instead of picking an audience itself, so a notification can never
+ * reach a wider group than the one declared here.
+ */
+export const NOTIFICATION_TOPICS: Record<NotificationTopic, NotificationTopicDefinition> = {
+  event_opened: {
+    topic: 'event_opened',
+    audience: 'everyone',
+    label: 'פתיחת מכירה חדשה',
+    description: 'הודעה ברגע שנפתחת הזמנה לשבת או לחג.',
+  },
+  broadcast: {
+    topic: 'broadcast',
+    audience: 'everyone',
+    label: 'הודעות ועדכונים',
+    description: 'הודעות כלליות שנשלחות מהמערכת, כמו מבצעים ושינויים.',
+  },
+  order_confirmation: {
+    topic: 'order_confirmation',
+    audience: 'self',
+    label: 'אישור על ההזמנה שלי',
+    description: 'אישור אישי שנשלח אליך בלבד אחרי שהזמנה נקלטה.',
+  },
+  new_order: {
+    topic: 'new_order',
+    audience: 'admins',
+    label: 'הזמנה חדשה בחנות',
+    description: 'התראה לאדמינים על כל הזמנה שנכנסת מלקוח.',
+  },
+  task_reminder: {
+    topic: 'task_reminder',
+    audience: 'staff',
+    label: 'תזכורות משימות',
+    description: 'הסיכום היומי של משימות שבאיחור, להיום ולשבוע הקרוב.',
+  },
+}
+
+/** Topics a user is allowed to see and toggle, given their role. */
+export function topicsForRole(role: { isApproved: boolean; isAdmin: boolean }) {
+  return Object.values(NOTIFICATION_TOPICS).filter((t) => {
+    if (t.audience === 'admins') return role.isAdmin
+    if (t.audience === 'staff') return role.isApproved || role.isAdmin
+    return true
+  })
+}
+
+export function isNotificationTopic(value: unknown): value is NotificationTopic {
+  return typeof value === 'string' && value in NOTIFICATION_TOPICS
+}
+
+function audienceCondition(audience: NotificationAudience, userId?: string): SQL | undefined {
+  switch (audience) {
+    case 'admins':
+      return eq(profiles.is_admin, true)
+    case 'staff':
+      return or(eq(profiles.is_approved, true), eq(profiles.is_admin, true))
+    case 'self':
+      // Guarded by the caller; a missing id must select nobody, never everybody.
+      return eq(profiles.id, userId ?? '00000000-0000-0000-0000-000000000000')
+    case 'everyone':
+      return undefined
+  }
+}
+
+/**
+ * Devices that should receive `topic`, after both the audience rule and the
+ * recipient's own opt-out are applied.
+ *
+ * `userId` is required for a `self` topic and ignored for the rest.
+ */
+export async function getSubscriptionsForTopic(topic: NotificationTopic, userId?: string) {
+  const { audience } = NOTIFICATION_TOPICS[topic]
+  if (audience === 'self' && !userId) return []
+
   return db
     .select(SUBSCRIPTION_COLUMNS)
     .from(pushSubscriptions)
     .innerJoin(profiles, eq(pushSubscriptions.user_id, profiles.id))
-    .where(eq(profiles.is_blocked, false))
+    // A row exists only when the user changed the default, so "no row" means
+    // subscribed — left join, and treat NULL as enabled.
+    .leftJoin(
+      notificationPreferences,
+      and(
+        eq(notificationPreferences.user_id, pushSubscriptions.user_id),
+        eq(notificationPreferences.topic, topic)
+      )
+    )
+    .where(
+      and(
+        eq(profiles.is_blocked, false),
+        audienceCondition(audience, userId),
+        or(isNull(notificationPreferences.enabled), eq(notificationPreferences.enabled, true))
+      )
+    )
 }
