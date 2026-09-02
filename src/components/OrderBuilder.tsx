@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { aggregateOrderIngredients } from '@/utils/costing'
@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { CustomSelect } from '@/components/ui/CustomSelect'
+import { AnchoredDropdown } from '@/components/ui/AnchoredDropdown'
 
 interface Dish {
   id: string
@@ -104,6 +105,9 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
 
   // Combobox dropdown state
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null)
+  // Trigger of the row whose dish popover is open — the portalled dropdown
+  // anchors to it instead of living inside the clipped card.
+  const dishTriggerRef = useRef<HTMLButtonElement | null>(null)
   const [dishSearch, setDishSearch] = useState('')
 
   const hasStartersSelected = selectedDishes.some((sd) => {
@@ -1093,8 +1097,9 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                         <button
                           type="button"
                           disabled={isLocked}
-                          onClick={() => {
+                          onClick={(e) => {
                             if (isLocked) return
+                            dishTriggerRef.current = e.currentTarget
                             setActiveDropdown(activeDropdown === idx ? null : idx)
                             setDishSearch('')
                           }}
@@ -1111,12 +1116,14 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
 
                         {/* Dropdown Popover */}
                         {activeDropdown === idx && (
-                          <>
-                            <div
-                              className="fixed inset-0 z-40 bg-transparent"
-                              onClick={() => setActiveDropdown(null)}
-                            />
-                            <div className="absolute right-0 left-0 mt-1.5 bg-zinc-950 border border-zinc-900 rounded-xl shadow-2xl z-50 p-2 space-y-2 max-h-64 flex flex-col animate-in fade-in slide-in-from-top-2 duration-150">
+                          <AnchoredDropdown
+                            anchorRef={dishTriggerRef}
+                            open
+                            onClose={() => setActiveDropdown(null)}
+                            maxHeight={320}
+                            className="p-2 gap-2"
+                          >
+                            <div className="shrink-0">
                               <input
                                 type="text"
                                 placeholder="חפש מנה..."
@@ -1125,7 +1132,8 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                                 className="w-full px-3 py-2 bg-black border border-zinc-900 rounded-lg text-white text-xs placeholder-zinc-600 focus:border-amber-500 outline-none text-right"
                                 autoFocus
                               />
-                              <div className="flex-1 overflow-y-auto space-y-0.5 pr-1">
+                            </div>
+                            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-0.5 pr-1">
                                 {(() => {
                                   const filteredOptions = dishesList.filter((d) =>
                                     d.name.toLowerCase().includes(dishSearch.toLowerCase()) &&
@@ -1160,9 +1168,8 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                                     )
                                   })
                                 })()}
-                              </div>
                             </div>
-                          </>
+                          </AnchoredDropdown>
                         )}
                       </div>
 
