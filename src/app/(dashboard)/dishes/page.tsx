@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import {
   UtensilsCrossed,
@@ -17,6 +17,7 @@ import {
   Search,
 } from 'lucide-react'
 import { CustomSelect } from '@/components/ui/CustomSelect'
+import { AnchoredDropdown } from '@/components/ui/AnchoredDropdown'
 import { useCustomDialogs } from '@/hooks/useCustomDialogs'
 
 interface Ingredient {
@@ -79,6 +80,9 @@ export default function DishesPage() {
 
   // Searchable combobox state inside the builder
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null)
+  // Points at the trigger of the row whose popover is open, so the portalled
+  // dropdown knows what to anchor to.
+  const ingredientTriggerRef = useRef<HTMLButtonElement | null>(null)
   const [ingredientSearch, setIngredientSearch] = useState('')
 
   // Fetch Dishes and Ingredients
@@ -618,7 +622,8 @@ export default function DishesPage() {
                         <div className="flex-1 min-w-[220px] relative">
                           <button
                             type="button"
-                            onClick={() => {
+                            onClick={(e) => {
+                              ingredientTriggerRef.current = e.currentTarget
                               setActiveDropdown(activeDropdown === idx ? null : idx)
                               setIngredientSearch('')
                             }}
@@ -634,12 +639,14 @@ export default function DishesPage() {
 
                           {/* Searchable overlay content */}
                           {activeDropdown === idx && (
-                            <>
-                              <div
-                                className="fixed inset-0 z-40 bg-transparent"
-                                onClick={() => setActiveDropdown(null)}
-                              />
-                              <div className="absolute right-0 left-0 mt-1.5 bg-zinc-950 border border-zinc-900 rounded-xl shadow-2xl z-50 p-2 space-y-2 max-h-64 flex flex-col animate-in fade-in slide-in-from-top-2 duration-150">
+                            <AnchoredDropdown
+                              anchorRef={ingredientTriggerRef}
+                              open
+                              onClose={() => setActiveDropdown(null)}
+                              maxHeight={320}
+                              className="p-2 gap-2"
+                            >
+                              <div className="shrink-0">
                                 <input
                                   type="text"
                                   placeholder="חפש חומר גלם..."
@@ -648,7 +655,8 @@ export default function DishesPage() {
                                   className="w-full px-3 py-2 bg-black border border-zinc-900 rounded-lg text-white text-xs placeholder-zinc-650 placeholder-zinc-500 focus:border-amber-500 outline-none text-right"
                                   autoFocus
                                 />
-                                <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                              </div>
+                              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-3 pr-1">
                                   {filteredOptions.length === 0 ? (
                                     <p className="text-xxs text-zinc-600 py-3.5 text-center">לא נמצאו חומרי גלם</p>
                                   ) : (
@@ -689,9 +697,8 @@ export default function DishesPage() {
                                       })}
                                     </>
                                   )}
-                                </div>
                               </div>
-                            </>
+                            </AnchoredDropdown>
                           )}
                         </div>
 

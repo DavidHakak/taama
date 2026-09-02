@@ -28,6 +28,7 @@ import {
   BellRing,
 } from 'lucide-react'
 import { CustomSelect } from '@/components/ui/CustomSelect'
+import { AnchoredDropdown } from '@/components/ui/AnchoredDropdown'
 import { PushToggle } from '@/components/PushToggle'
 import { NotificationPreferences } from '@/components/NotificationPreferences'
 import { useCustomDialogs } from '@/hooks/useCustomDialogs'
@@ -225,23 +226,15 @@ function StatusMenu({
   onChange: (next: TaskStatus) => void
 }) {
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const onClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onClickOutside)
-    return () => document.removeEventListener('mousedown', onClickOutside)
-  }, [open])
+  const triggerRef = useRef<HTMLButtonElement>(null)
 
   const meta = STATUS_META[value]
   const Icon = meta.icon
 
   return (
-    <div ref={ref} className="relative shrink-0">
+    <div className="relative shrink-0">
       <button
+        ref={triggerRef}
         type="button"
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
@@ -256,8 +249,16 @@ function StatusMenu({
         <ChevronDown className={`h-3 w-3 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
-      {open && (
-        <div className="absolute right-0 mt-1.5 w-44 bg-zinc-950 border border-zinc-800 rounded-xl shadow-xl z-30 p-1.5 space-y-0.5">
+      <AnchoredDropdown
+        anchorRef={triggerRef}
+        open={open}
+        onClose={() => setOpen(false)}
+        matchAnchorWidth={false}
+        width={176}
+        maxHeight={260}
+        className="border-zinc-800 p-1.5"
+      >
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-0.5">
           {STATUS_ORDER.map((s) => {
             const m = STATUS_META[s]
             const SIcon = m.icon
@@ -281,7 +282,7 @@ function StatusMenu({
             )
           })}
         </div>
-      )}
+      </AnchoredDropdown>
     </div>
   )
 }
