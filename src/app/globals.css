@@ -232,3 +232,41 @@ input[type=number] {
   -moz-appearance: textfield;
   appearance: textfield;
 }
+
+/* Side drawers (notifications). The panel is anchored right, so it enters from
+   translateX(100%) — off the right edge — in both RTL and LTR. */
+@keyframes drawer-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes drawer-backdrop-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-drawer-in {
+  animation: drawer-slide-in 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.animate-drawer-backdrop {
+  animation: drawer-backdrop-in 0.25s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .animate-drawer-in,
+  .animate-drawer-backdrop {
+    animation: none;
+  }
+}

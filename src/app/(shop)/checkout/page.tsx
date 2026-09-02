@@ -15,6 +15,11 @@ export default function CheckoutPage() {
 
   const [loading, setLoading] = useState(false)
   const [profile, setProfile] = useState<{ name: string; phone: string; email: string } | null>(null)
+  // Recipient details are mandatory, so they are editable here rather than
+  // read-only: a profile that never had a name or phone would otherwise leave
+  // the customer with a blocked form and nothing to fix.
+  const [recipientName, setRecipientName] = useState('')
+  const [recipientPhone, setRecipientPhone] = useState('')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [acceptTerms, setAcceptTerms] = useState(false)
@@ -54,6 +59,8 @@ export default function CheckoutPage() {
             phone: data.phone || '',
             email: data.email || user.email || '',
           })
+          setRecipientName(data.full_name || '')
+          setRecipientPhone(data.phone || '')
         } else {
           setProfile({
             name: '',
@@ -119,6 +126,13 @@ export default function CheckoutPage() {
     ? 'הסל השתנה — יש להחיל את הקופון מחדש'
     : couponError
 
+  // Recipient validity, same rule the server enforces: an Israeli number is a
+  // leading 0 plus 8 digits (landline) or 9 (mobile), once separators are gone.
+  const trimmedName = recipientName.trim()
+  const phoneDigits = recipientPhone.replace(/[\s\-().]/g, '')
+  const phoneIsValid = /^0\d{8,9}$/.test(phoneDigits)
+  const recipientIsValid = trimmedName.length >= 2 && phoneIsValid
+
   // Discount & Totals Math
   const baseTotal = Math.max(0, subtotal - totalDiscount)
   const couponDiscountAmount = effectiveCoupon ? effectiveCoupon.discountAmount : 0
@@ -128,6 +142,18 @@ export default function CheckoutPage() {
     e.preventDefault()
     if (!eventId) {
       setError('לא נבחר אירוע פעיל')
+      return
+    }
+
+    // Mirrors the server check in placeOrder, so the customer is told what is
+    // missing before the round trip.
+    if (trimmedName.length < 2) {
+      setError('יש למלא את שם מקבל ההזמנה (לפחות 2 תווים)')
+      return
+    }
+
+    if (!phoneIsValid) {
+      setError('יש למלא מספר טלפון תקין של מקבל ההזמנה (לדוגמה 050-1234567)')
       return
     }
 
@@ -150,11 +176,18 @@ export default function CheckoutPage() {
     // effectiveCoupon, not appliedCoupon: finalTotal already excludes a stale
     // coupon, so sending its code would have the server apply a discount the
     // customer is not being shown and reject the order on the total.
-    const result = await placeOrder(eventId, itemsPayload, finalTotal, effectiveCoupon?.code)
+    const result = await placeOrder(
+      eventId,
+      itemsPayload,
+      finalTotal,
+      { fullName: trimmedName, phone: phoneDigits },
+      effectiveCoupon?.code
+    )
 
     if (result.success) {
       clearCart()
       router.push('/my-account?success=true')
+      router.refresh()
     } else {
       setError(result.error || 'שגיאה במהלך ביצוע ההזמנה')
       setLoading(false)
@@ -244,13 +277,14 @@ export default function CheckoutPage() {
                     type="text"
                     value={couponCodeInput}
                     onChange={(e) => setCouponCodeInput(e.target.value)}
+                    disabled={couponLoading || loading}
                     placeholder="הקלד קוד קופון"
                     className="w-full px-3 py-1.5 sm:py-2 bg-black border border-zinc-900 rounded-lg sm:rounded-xl text-white text-sm outline-none focus:border-amber-500 transition-all uppercase font-bold"
                   />
                   <button
                     type="button"
                     onClick={handleApplyCoupon}
-                    disabled={couponLoading || !couponCodeInput.trim()}
+                    disabled={couponLoading || loading || !couponCodeInput.trim()}
                     className="px-3 py-1.5 sm:px-3.5 sm:py-2 bg-zinc-900 hover:bg-zinc-800 text-amber-500 hover:text-amber-400 border border-zinc-850 rounded-lg sm:rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap disabled:opacity-30 cursor-pointer"
                   >
                     {couponLoading ? 'בודק...' : 'החל'}
@@ -311,33 +345,49 @@ export default function CheckoutPage() {
         {/* Right Side: Checkout Form */}
         <div className="md:col-span-2">
           <form onSubmit={handleCheckoutSubmit} className="bg-zinc-950 border border-zinc-900 rounded-xl sm:rounded-2xl p-4 sm:p-6 space-y-4 sm:space-y-6">
-            <h3 className="text-sm sm:text-base font-bold text-white border-b border-zinc-900 pb-2 sm:pb-3">פרטי מקבל ההזמנה</h3>
+            <div className="border-b border-zinc-900 pb-2 sm:pb-3">
+              <h3 className="text-sm sm:text-base font-bold text-white">פרטי מקבל ההזמנה</h3>
+              <p className="text-[10px] sm:text-xs text-zinc-500 font-medium mt-1">שדות המסומנים ב-* הם שדות חובה ולא ניתן לשלוח הזמנה בלעדיהם.</p>
+            </div>
 
             {profile ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="block text-[10px] sm:text-xs font-extrabold uppercase tracking-wider text-zinc-500 mb-1.5 sm:mb-2">
-                    שם מלא (לאיסוף)
+                  <label htmlFor="recipientName" className="block text-[10px] sm:text-xs font-extrabold uppercase tracking-wider text-zinc-500 mb-1.5 sm:mb-2">
+                    שם מלא (לאיסוף) <span className="text-amber-500">*</span>
                   </label>
                   <input
+                    id="recipientName"
                     type="text"
                     required
-                    disabled
-                    value={profile.name}
-                    className="w-full px-3 py-2 sm:px-4 sm:py-2.5 bg-black border border-zinc-900 rounded-lg sm:rounded-xl text-zinc-400 text-xs sm:text-sm outline-none cursor-not-allowed"
+                    disabled={loading}
+                    value={recipientName}
+                    onChange={(e) => setRecipientName(e.target.value)}
+                    placeholder="שם מלא של מי שאוסף את ההזמנה"
+                    autoComplete="name"
+                    className="w-full px-3 py-2 sm:px-4 sm:py-2.5 bg-black border border-zinc-900 rounded-lg sm:rounded-xl text-white placeholder-zinc-700 text-xs sm:text-sm outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] sm:text-xs font-extrabold uppercase tracking-wider text-zinc-500 mb-1.5 sm:mb-2">
-                    מספר טלפון
+                  <label htmlFor="recipientPhone" className="block text-[10px] sm:text-xs font-extrabold uppercase tracking-wider text-zinc-500 mb-1.5 sm:mb-2">
+                    מספר טלפון <span className="text-amber-500">*</span>
                   </label>
                   <input
+                    id="recipientPhone"
                     type="tel"
                     required
-                    disabled
-                    value={profile.phone}
-                    className="w-full px-3 py-2 sm:px-4 sm:py-2.5 bg-black border border-zinc-900 rounded-lg sm:rounded-xl text-zinc-400 text-xs sm:text-sm outline-none cursor-not-allowed"
+                    disabled={loading}
+                    value={recipientPhone}
+                    onChange={(e) => setRecipientPhone(e.target.value)}
+                    placeholder="050-1234567"
+                    autoComplete="tel"
+                    inputMode="tel"
+                    dir="ltr"
+                    className="w-full px-3 py-2 sm:px-4 sm:py-2.5 bg-black border border-zinc-900 rounded-lg sm:rounded-xl text-white placeholder-zinc-700 text-xs sm:text-sm text-right outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   />
+                  {recipientPhone.trim().length > 0 && !phoneIsValid && (
+                    <p className="text-[10px] font-bold text-rose-400 mt-1.5">מספר טלפון לא תקין (לדוגמה 050-1234567)</p>
+                  )}
                 </div>
                 <div className="sm:col-span-2">
                   <label className="block text-[10px] sm:text-xs font-extrabold uppercase tracking-wider text-zinc-500 mb-1.5 sm:mb-2">
@@ -367,9 +417,10 @@ export default function CheckoutPage() {
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
+                disabled={loading}
                 placeholder="למשל: לארוז את הסלטים בנפרד..."
                 rows={3}
-                className="w-full px-3 py-2 sm:px-4 sm:py-3 bg-black border border-zinc-900 rounded-lg sm:rounded-xl text-white placeholder-zinc-700 text-xs focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none resize-none"
+                className="w-full px-3 py-2 sm:px-4 sm:py-3 bg-black border border-zinc-900 rounded-lg sm:rounded-xl text-white placeholder-zinc-700 text-xs focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none resize-none disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
 
@@ -395,6 +446,7 @@ export default function CheckoutPage() {
                 required
                 checked={acceptTerms}
                 onChange={(e) => setAcceptTerms(e.target.checked)}
+                disabled={loading}
                 className="w-4 h-4 mt-0.5 rounded border-zinc-900 bg-black text-amber-500 focus:ring-amber-500 focus:ring-opacity-25 shrink-0 cursor-pointer"
               />
               <label htmlFor="acceptTerms" className="text-xs text-zinc-400 font-semibold cursor-pointer">
@@ -417,14 +469,15 @@ export default function CheckoutPage() {
               <button
                 type="button"
                 onClick={() => router.push('/')}
-                className="px-3 py-2 bg-zinc-900 hover:bg-zinc-850 text-zinc-400 font-bold rounded-lg sm:rounded-xl text-xs transition-all cursor-pointer"
+                disabled={loading}
+                className="px-3 py-2 bg-zinc-900 hover:bg-zinc-850 text-zinc-400 font-bold rounded-lg sm:rounded-xl text-xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 חזרה לקטלוג
               </button>
 
               <button
                 type="submit"
-                disabled={loading || !profile}
+                disabled={loading || !profile || !recipientIsValid || !acceptTerms}
                 className="inline-flex items-center justify-center gap-1.5 px-4 py-2 sm:px-6 sm:py-3 bg-gradient-to-r from-yellow-600 via-amber-500 to-yellow-600 hover:from-yellow-500 hover:via-amber-600 hover:to-yellow-500 text-pure-white font-black rounded-lg sm:rounded-xl text-xs shadow-md transition-all cursor-pointer disabled:opacity-50"
               >
                 {loading ? (
