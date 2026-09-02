@@ -3,6 +3,7 @@ import { db } from '@/db'
 import { shopEvents, shopProducts, shopOrderItems, shopOrders, shopProductVariants, storeSettings } from '@/db/schema'
 import { eq, and, sql, inArray } from 'drizzle-orm'
 import StorefrontClient from '../../components/storefront-client'
+import { storefrontBrand } from '@/lib/brand'
 
 export const metadata = {
   title: 'קייטרינג טעמא - אוכל מוכן לשבת ואירועים',
@@ -13,18 +14,22 @@ export const metadata = {
 export const revalidate = 0
 
 export default async function StorefrontPage() {
+  // כל שאילתה כאן מוגבלת למותג של החנות. בלי זה, אירוע מכירה או
+  // מוצר שנוצרו למותג החלבי היו נפתחים לציבור באתר הבשרי.
+  const brand = await storefrontBrand()
+
   // 1. Fetch active events
   const rawActiveEvents = await db
     .select()
     .from(shopEvents)
-    .where(eq(shopEvents.is_active, true))
+    .where(and(eq(shopEvents.is_active, true), eq(shopEvents.brand_id, brand.id)))
     .orderBy(shopEvents.pickup_date)
 
   // Fetch cutoff hours setting
   const [cutoffSetting] = await db
     .select({ value: storeSettings.value })
     .from(storeSettings)
-    .where(eq(storeSettings.key, 'cutoff_hours'))
+    .where(and(eq(storeSettings.key, 'cutoff_hours'), eq(storeSettings.brand_id, brand.id)))
     .limit(1)
 
   const cutoffHours = cutoffSetting ? parseInt(cutoffSetting.value) : 24
@@ -59,7 +64,7 @@ export default async function StorefrontPage() {
       imageUrl: shopProducts.image_url,
     })
     .from(shopProducts)
-    .where(eq(shopProducts.is_visible, true))
+    .where(and(eq(shopProducts.is_visible, true), eq(shopProducts.brand_id, brand.id)))
 
   // 3. Fetch all variants
   const variantsRaw = await db
@@ -71,6 +76,10 @@ export default async function StorefrontPage() {
       stockLimit: shopProductVariants.stock_limit,
     })
     .from(shopProductVariants)
+    // innerJoin ולא סינון בזיכרון: אין סיבה למשוך לשרת את הווריאנטים
+    // של המותג השני רק כדי לזרוק אותם.
+    .innerJoin(shopProducts, eq(shopProducts.id, shopProductVariants.shop_product_id))
+    .where(eq(shopProducts.brand_id, brand.id))
 
   // 4. Query sum of ordered quantities per product, size, and event for all active events
   const activeEventIds = activeEvents.map((e) => e.id)

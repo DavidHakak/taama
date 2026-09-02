@@ -6,6 +6,7 @@ import { createClient } from '@/utils/supabase/server'
 import { eq, and, or, isNull, gte, sql, inArray } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { getSubscriptionsForTopic, sendToSubscriptions } from '@/utils/push'
+import { storefrontBrand } from '@/lib/brand'
 
 interface OrderPayloadItem {
   productId: string
@@ -41,6 +42,7 @@ export async function placeOrder(
 ) {
   try {
     const supabase = await createClient()
+    const brand = await storefrontBrand()
 
     // 1. Get authenticated user
     const { data: { user } } = await supabase.auth.getUser()
@@ -77,7 +79,7 @@ export async function placeOrder(
     const [cutoffSetting] = await db
       .select({ value: storeSettings.value })
       .from(storeSettings)
-      .where(eq(storeSettings.key, 'cutoff_hours'))
+      .where(and(eq(storeSettings.key, 'cutoff_hours'), eq(storeSettings.brand_id, brand.id)))
       .limit(1)
 
     const cutoffHours = cutoffSetting ? parseInt(cutoffSetting.value) : 24
@@ -388,7 +390,11 @@ export async function placeOrder(
 
 export async function getPickupDetails() {
   try {
-    const settingsList = await db.select().from(storeSettings)
+    const brand = await storefrontBrand()
+    const settingsList = await db
+      .select()
+      .from(storeSettings)
+      .where(eq(storeSettings.brand_id, brand.id))
     const settingsMap = new Map(settingsList.map((s) => [s.key, s.value]))
 
     const address = settingsMap.get('pickup_address') || 'רחוב האורגים 12, אשדוד'
