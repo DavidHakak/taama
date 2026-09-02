@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, numeric, timestamp, integer, date, boolean, pgView } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, numeric, timestamp, integer, date, boolean, pgView, primaryKey } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
 
 export const ingredients = pgTable('ingredients', {
@@ -226,6 +226,21 @@ export const pushSubscriptions = pgTable('push_subscriptions', {
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   last_success_at: timestamp('last_success_at', { withTimezone: true }),
 })
+
+// כיבוי/הדלקה של סוג התראה מסוים עבור משתמש מסוים.
+// שורה קיימת רק כשהמשתמש שינה את ברירת המחדל — היעדר שורה = מקבל.
+export const notificationPreferences = pgTable(
+  'notification_preferences',
+  {
+    user_id: uuid('user_id')
+      .references(() => profiles.id, { onDelete: 'cascade' })
+      .notNull(),
+    topic: text('topic').notNull(), // ראה NOTIFICATION_TOPICS ב-utils/push
+    enabled: boolean('enabled').notNull().default(true),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.user_id, table.topic] })]
+)
 
 // משימות בתוך קטגוריה
 export const tasks = pgTable('tasks', {
