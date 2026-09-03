@@ -24,25 +24,8 @@ interface Ingredient {
   unit: string
   cost_per_unit: number
   category: string
-  kashrut: string
   created_at: string
 }
-
-/**
- * כשרות היא תכונה של הרכיב עצמו, לא שיוך למותג: עוף הוא בשרי בלי
- * קשר לכמה מותגים יש. היא מה שיחסום בהמשך שיוך גבינה למוצר בשרי.
- *
- * הצבע אינו הסימון היחיד — יש גם אות וגם מילה, כדי שהסיווג יהיה
- * קריא גם בעיוורון צבעים וגם במסך בשמש. טעות בשרי/חלבי יקרה.
- */
-const KASHRUT_OPTIONS = [
-  { value: 'meat',  letter: 'ב', label: 'בשרי',  text: 'text-rose-400',    active: 'bg-rose-500/15 border-rose-500/40 text-rose-300' },
-  { value: 'dairy', letter: 'ח', label: 'חלבי',  text: 'text-sky-400',     active: 'bg-sky-500/15 border-sky-500/40 text-sky-300' },
-  { value: 'parve', letter: 'פ', label: 'פרווה', text: 'text-emerald-400', active: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300' },
-] as const
-
-const kashrutOf = (value: string | null | undefined) =>
-  KASHRUT_OPTIONS.find((k) => k.value === value) ?? KASHRUT_OPTIONS[2]
 
 const INGREDIENT_CATEGORIES = [
   "ירקות ופירות",
@@ -71,7 +54,6 @@ export default function IngredientsPage() {
   const [formUnit, setFormUnit] = useState('kg')
   const [formCost, setFormCost] = useState('')
   const [formCategory, setFormCategory] = useState('ירקות ופירות')
-  const [formKashrut, setFormKashrut] = useState('parve')
   const [formSubmitting, setFormSubmitting] = useState(false)
 
   // Fetch ingredients
@@ -105,9 +87,6 @@ export default function IngredientsPage() {
     setFormUnit('kg')
     setFormCost('')
     setFormCategory('ירקות ופירות')
-    // פרווה כברירת מחדל: הערך הכי פחות מגביל, כדי שרכיב חדש
-    // לא ייחסם בטעות לפני שסווג.
-    setFormKashrut('parve')
     setIsModalOpen(true)
   }
 
@@ -119,7 +98,6 @@ export default function IngredientsPage() {
     setFormUnit(ingredient.unit)
     setFormCost(ingredient.cost_per_unit.toString())
     setFormCategory(ingredient.category || 'אחר')
-    setFormKashrut(ingredient.kashrut || 'parve')
     setIsModalOpen(true)
   }
 
@@ -140,13 +118,13 @@ export default function IngredientsPage() {
       if (modalMode === 'create') {
         const { error: insertError } = await supabase
           .from('ingredients')
-          .insert([{ name: formName, unit: formUnit, cost_per_unit: cost, category: formCategory, kashrut: formKashrut }])
+          .insert([{ name: formName, unit: formUnit, cost_per_unit: cost, category: formCategory }])
 
         if (insertError) throw insertError
       } else if (modalMode === 'edit' && selectedIngredient) {
         const { error: updateError } = await supabase
           .from('ingredients')
-          .update({ name: formName, unit: formUnit, cost_per_unit: cost, category: formCategory, kashrut: formKashrut })
+          .update({ name: formName, unit: formUnit, cost_per_unit: cost, category: formCategory })
           .eq('id', selectedIngredient.id)
 
         if (updateError) throw updateError
@@ -282,7 +260,6 @@ export default function IngredientsPage() {
                         <tr className="border-b border-zinc-900 bg-zinc-950/40 text-zinc-400 text-xs font-bold uppercase tracking-wider">
                           <th className="py-4.5 px-6">שם חומר הגלם</th>
                           <th className="py-4.5 px-6">יחידת מידה</th>
-                          <th className="py-4.5 px-6">כשרות</th>
                           <th className="py-4.5 px-6">עלות ליחידה</th>
                           <th className="py-4.5 px-6 text-left">פעולות</th>
                         </tr>
@@ -295,19 +272,6 @@ export default function IngredientsPage() {
                               <span className="inline-block px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300">
                                 {getUnitLabel(ing.unit)}
                               </span>
-                            </td>
-                            <td className="py-4 px-6">
-                              {(() => {
-                                const k = kashrutOf(ing.kashrut)
-                                return (
-                                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-bold ${k.text}`}>
-                                    <span className={`flex h-4 w-4 items-center justify-center bg-black/40 text-[10px] font-black ${k.value === 'dairy' ? 'rounded-full' : 'rounded-sm'}`}>
-                                      {k.letter}
-                                    </span>
-                                    {k.label}
-                                  </span>
-                                )
-                              })()}
                             </td>
                             <td className="py-4 px-6 font-bold text-amber-500 font-mono">
                               ₪{Number(ing.cost_per_unit).toFixed(2)} <span className="text-xs text-zinc-500 font-medium">/ {getUnitLabel(ing.unit)}</span>
@@ -480,46 +444,6 @@ export default function IngredientsPage() {
                     />
                   </div>
                 </div>
-              </div>
-
-              {/* כשרות — בורר מפורש ולא רשימה נפתחת: שלוש אפשרויות
-                  נבחרות בקליק אחד, והצבע נראה בלי לפתוח כלום. */}
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-                  כשרות
-                </label>
-                <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="כשרות">
-                  {KASHRUT_OPTIONS.map((opt) => {
-                    const isActive = formKashrut === opt.value
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        role="radio"
-                        aria-checked={isActive}
-                        onClick={() => setFormKashrut(opt.value)}
-                        disabled={formSubmitting}
-                        className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border text-sm font-bold transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
-                          isActive
-                            ? opt.active
-                            : 'bg-black border-zinc-900 text-zinc-500 hover:border-zinc-800 hover:text-zinc-300'
-                        }`}
-                      >
-                        <span
-                          className={`flex h-5 w-5 shrink-0 items-center justify-center text-xs font-black ${
-                            opt.value === 'dairy' ? 'rounded-full' : 'rounded-sm'
-                          } ${isActive ? 'bg-black/30' : 'bg-zinc-900'}`}
-                        >
-                          {opt.letter}
-                        </span>
-                        {opt.label}
-                      </button>
-                    )
-                  })}
-                </div>
-                <p className="text-[11px] text-zinc-550 mt-2">
-                  קובע לאילו מוצרים מותר לשייך את הרכיב. פרווה מתאים לשני המותגים.
-                </p>
               </div>
 
               {/* Submit buttons */}
