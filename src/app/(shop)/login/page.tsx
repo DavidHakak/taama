@@ -1,9 +1,12 @@
 'use client'
 
-import React, { useState, useEffect, Suspense } from 'react'
+import React, { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
-import { User, Mail, Lock, Phone, Loader2, ArrowLeft } from 'lucide-react'
+import { checkEmailRegistered } from './actions'
+import { User, Mail, Lock, Phone, Loader2, ArrowLeft, Eye, EyeOff, KeyRound } from 'lucide-react'
+
+type AuthMode = 'signin' | 'signup' | 'forgot'
 
 function LoginForm() {
   const router = useRouter()
@@ -14,13 +17,24 @@ function LoginForm() {
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [phoneNum, setPhoneNum] = useState('')
-  
+
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(() => searchParams.get('error'))
   const [success, setSuccess] = useState<string | null>(null)
-  const [isSignUp, setIsSignUp] = useState(false)
+  const [mode, setMode] = useState<AuthMode>('signin')
+  const [showPassword, setShowPassword] = useState(false)
+
+  const isSignUp = mode === 'signup'
+  const isForgot = mode === 'forgot'
 
   const redirectTo = searchParams.get('redirectTo') || '/'
+
+  const switchMode = (next: AuthMode) => {
+    setMode(next)
+    setError(null)
+    setSuccess(null)
+    setShowPassword(false)
+  }
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -29,9 +43,54 @@ function LoginForm() {
     setSuccess(null)
 
     try {
-      if (isSignUp) {
+      if (isForgot) {
+        if (!email.trim()) {
+          setError('אנא הזן את כתובת האימייל שלך')
+          setLoading(false)
+          return
+        }
+
+        // Make sure an account actually exists before sending a recovery mail.
+        const emailCheck = await checkEmailRegistered(email)
+        if (!emailCheck.success) {
+          setError(emailCheck.error)
+          setLoading(false)
+          return
+        }
+        if (!emailCheck.exists) {
+          setError('לא נמצא חשבון עם כתובת אימייל זו. בדוק את הכתובת או הירשם כלקוח חדש.')
+          setLoading(false)
+          return
+        }
+
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+          email.trim(),
+          {
+            redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+          }
+        )
+
+        if (resetError) {
+          setError(resetError.message)
+        } else {
+          setSuccess('שלחנו לך קישור לאיפוס הסיסמה. בדוק את תיבת המייל שלך.')
+        }
+      } else if (isSignUp) {
         if (!name.trim() || !phoneNum.trim()) {
           setError('אנא מלא את כל השדות (שם מלא ומספר טלפון)')
+          setLoading(false)
+          return
+        }
+
+        // Make sure the address is free before creating the account.
+        const emailCheck = await checkEmailRegistered(email)
+        if (!emailCheck.success) {
+          setError(emailCheck.error)
+          setLoading(false)
+          return
+        }
+        if (emailCheck.exists) {
+          setError('כתובת אימייל זו כבר רשומה במערכת. התחבר לחשבון או בצע שחזור סיסמה.')
           setLoading(false)
           return
         }
@@ -81,10 +140,12 @@ function LoginForm() {
 
         <div className="text-center mb-8">
           <h1 className="text-2xl font-black text-white tracking-tight">
-            {isSignUp ? 'יצירת חשבון חדש' : 'התחברות לחשבון'}
+            {isForgot ? 'שחזור סיסמה' : isSignUp ? 'יצירת חשבון חדש' : 'התחברות לחשבון'}
           </h1>
           <p className="text-zinc-500 text-xs mt-1.5 font-medium">
-            {isSignUp
+            {isForgot
+              ? 'הזן את האימייל שלך ונשלח אליך קישור לבחירת סיסמה חדשה'
+              : isSignUp
               ? 'הרשם בקלות כדי להזמין מנות מעולות לשבת'
               : 'התחבר כדי לצפות בהזמנות קודמות ולהשלים רכישה'}
           </p>
@@ -102,10 +163,11 @@ function LoginForm() {
                   <input
                     type="text"
                     required
+                    disabled={loading}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="ישראל ישראלי"
-                    className="w-full pr-11 pl-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white placeholder-zinc-700 text-xs focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none"
+                    className="w-full pr-11 pl-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white placeholder-zinc-700 text-xs focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none disabled:opacity-50"
                   />
                 </div>
               </div>
@@ -119,10 +181,11 @@ function LoginForm() {
                   <input
                     type="tel"
                     required
+                    disabled={loading}
                     value={phoneNum}
                     onChange={(e) => setPhoneNum(e.target.value)}
                     placeholder="050-1234567"
-                    className="w-full pr-11 pl-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white placeholder-zinc-700 text-xs focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none"
+                    className="w-full pr-11 pl-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white placeholder-zinc-700 text-xs focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none disabled:opacity-50"
                   />
                 </div>
               </div>
@@ -138,30 +201,56 @@ function LoginForm() {
               <input
                 type="email"
                 required
+                disabled={loading}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="customer@example.com"
-                className="w-full pr-11 pl-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white placeholder-zinc-700 text-xs focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none"
+                className="w-full pr-11 pl-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white placeholder-zinc-700 text-xs focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none disabled:opacity-50"
               />
             </div>
           </div>
 
-          <div>
-            <label className="block text-xxs font-extrabold uppercase tracking-wider text-zinc-500 mb-2">
-              סיסמה
-            </label>
-            <div className="relative">
-              <Lock className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full pr-11 pl-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white placeholder-zinc-700 text-xs focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none"
-              />
+          {!isForgot && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xxs font-extrabold uppercase tracking-wider text-zinc-500">
+                  סיסמה
+                </label>
+                {!isSignUp && (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => switchMode('forgot')}
+                    className="text-xxs font-bold text-amber-500 hover:text-amber-400 transition-colors disabled:opacity-50"
+                  >
+                    שכחת סיסמה?
+                  </button>
+                )}
+              </div>
+              <div className="relative">
+                <Lock className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  disabled={loading}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pr-11 pl-11 py-2.5 bg-black border border-zinc-900 rounded-xl text-white placeholder-zinc-700 text-xs focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none disabled:opacity-50"
+                />
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'הסתר סיסמה' : 'הצג סיסמה'}
+                  title={showPassword ? 'הסתר סיסמה' : 'הצג סיסמה'}
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-amber-500 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           {error && (
             <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl text-xs font-bold">
@@ -184,26 +273,39 @@ function LoginForm() {
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <>
-                <span>{isSignUp ? 'הרשם וצור חשבון' : 'התחבר לחשבון'}</span>
-                <ArrowLeft className="h-4 w-4" />
+                <span>
+                  {isForgot
+                    ? 'שלח לי קישור לאיפוס'
+                    : isSignUp
+                    ? 'הרשם וצור חשבון'
+                    : 'התחבר לחשבון'}
+                </span>
+                {isForgot ? <KeyRound className="h-4 w-4" /> : <ArrowLeft className="h-4 w-4" />}
               </>
             )}
           </button>
         </form>
 
         <div className="mt-6 text-center">
-          <button
-            onClick={() => {
-              setIsSignUp(!isSignUp)
-              setError(null)
-              setSuccess(null)
-            }}
-            className="text-xs font-bold text-amber-500 hover:text-amber-400 transition-colors"
-          >
-            {isSignUp
-              ? 'כבר נרשמת? לחץ להתחברות'
-              : 'לקוח חדש? לחץ כאן להרשמה מהירה'}
-          </button>
+          {isForgot ? (
+            <button
+              disabled={loading}
+              onClick={() => switchMode('signin')}
+              className="text-xs font-bold text-amber-500 hover:text-amber-400 transition-colors disabled:opacity-50"
+            >
+              חזרה למסך ההתחברות
+            </button>
+          ) : (
+            <button
+              disabled={loading}
+              onClick={() => switchMode(isSignUp ? 'signin' : 'signup')}
+              className="text-xs font-bold text-amber-500 hover:text-amber-400 transition-colors disabled:opacity-50"
+            >
+              {isSignUp
+                ? 'כבר נרשמת? לחץ להתחברות'
+                : 'לקוח חדש? לחץ כאן להרשמה מהירה'}
+            </button>
+          )}
         </div>
       </div>
     </div>
