@@ -5,6 +5,8 @@ import { shopPromotions, profiles } from '@/db/schema'
 import { eq } from 'drizzle-orm'
 import { CartProvider } from '@/components/cart-context'
 import ShopHeaderAndSidebar from '@/components/shop-header-and-sidebar'
+import InstallAppPrompt from '@/components/InstallAppPrompt'
+import InstallAppButton from '@/components/InstallAppButton'
 import { ChefHat } from 'lucide-react'
 import { createClient } from '@/utils/supabase/server'
 
@@ -56,6 +58,9 @@ export default async function ShopLayout({
         {/* Header & Sidebar client wrapper */}
         <ShopHeaderAndSidebar />
 
+        {/* "Install the app" popup — offered on every visit until installed */}
+        <InstallAppPrompt />
+
         {/* Main Content Area */}
         <main className="flex-1 max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8">
           {children}
@@ -64,6 +69,11 @@ export default async function ShopLayout({
         {/* Storefront Footer */}
         <footer className="bg-zinc-950 border-t border-zinc-900 py-8 px-4 sm:px-6 lg:px-8 mt-auto text-zinc-500 text-xs text-center">
           <div className="max-w-7xl mx-auto space-y-4">
+            {/* Always-available install entry point */}
+            <div className="max-w-xs mx-auto">
+              <InstallAppButton variant="menu" />
+            </div>
+
             <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-zinc-400 font-medium">
               <Link href="/contact" className="hover:text-amber-500 hover:underline transition-all">צור קשר</Link>
               <span>•</span>

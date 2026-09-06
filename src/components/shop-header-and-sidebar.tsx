@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useCart } from '@/components/cart-context'
 import { ShoppingBag, User, LogOut, X, Plus, Minus } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
+import InstallAppButton from '@/components/InstallAppButton'
 
 export default function ShopHeaderAndSidebar() {
   const router = useRouter()
@@ -51,7 +52,10 @@ export default function ShopHeaderAndSidebar() {
           </Link>
 
           {/* Navigation & User actions */}
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
+            {/* Install the PWA — hides itself once the app is installed */}
+            <InstallAppButton variant="header" />
+
             {userEmail ? (
               <div className="flex items-center gap-2 sm:gap-4">
                 <Link

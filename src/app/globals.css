@@ -270,3 +270,26 @@ input[type=number] {
     animation: none;
   }
 }
+
+/* Install-the-app prompt: a bottom sheet on mobile, a centred card on desktop. */
+@keyframes install-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-install-pop {
+  animation: install-pop-in 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-install-pop {
+    animation: none;
+  }
+}
