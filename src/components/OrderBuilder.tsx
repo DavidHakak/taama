@@ -22,6 +22,8 @@ import {
   ChefHat,
   Check,
   ShoppingCart,
+  Wallet,
+  CalendarClock,
 } from 'lucide-react'
 import Link from 'next/link'
 import { CustomSelect } from '@/components/ui/CustomSelect'
@@ -52,6 +54,9 @@ interface SelectedDishItem {
 }
 
 const CATEGORIES = ["סלטים", "ראשונות", "עיקריות", "תוספות", "קינוחים"]
+
+// קטגוריית המשימות שאליה נכנס מעקב התשלום של אירוע שהושלם
+const PAYMENT_TASK_CATEGORY = 'קייטרינג'
 
 export default function OrderBuilder({ orderId }: OrderBuilderProps) {
   const router = useRouter()
@@ -99,6 +104,16 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
   const [actualCost, setActualCost] = useState<number | ''>('')
 
   const [initialStatus, setInitialStatus] = useState<string | null>(null)
+
+  // מעקב תשלום: נשאל פעם אחת כשהאירוע עובר ל"הושלם", והמשימה נוצרת בשמירה.
+  // `paymentTaskExists` נטען מהמסד כדי שלא ייווצרו שתי משימות על אותו אירוע.
+  const [paymentTaskExists, setPaymentTaskExists] = useState(false)
+  const [paymentAskOpen, setPaymentAskOpen] = useState(false)
+  const [paymentDateOpen, setPaymentDateOpen] = useState(false)
+  const [paymentDateInput, setPaymentDateInput] = useState('')
+  const [paymentDateError, setPaymentDateError] = useState<string | null>(null)
+  const [pendingPaymentDue, setPendingPaymentDue] = useState<string | null>(null)
+  const [paymentAskDismissed, setPaymentAskDismissed] = useState(false)
 
   // Modal states
   const [summarySelectedDishes, setSummarySelectedDishes] = useState<string[]>([])
@@ -214,6 +229,21 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
             .eq('order_id', orderId)
 
           if (purchaseError) throw purchaseError
+
+          // האם כבר קיים מעקב תשלום לאירוע הזה? נכשל בשקט כדי שמסד שטרם עבר
+          // את מיגרציית order_id לא ישבור את טעינת האירוע כולו.
+          const { data: existingPaymentTask, error: paymentTaskError } = await supabase
+            .from('tasks')
+            .select('id')
+            .eq('order_id', orderId)
+            .maybeSingle()
+
+          if (paymentTaskError) {
+            console.error('Error checking existing payment task:', paymentTaskError)
+          } else {
+            setPaymentTaskExists(!!existingPaymentTask)
+          }
+
           setPurchasedIngredients(
             new Set(
               (purchaseRows || [])
@@ -275,6 +305,153 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
   const costToUse = actualCost !== '' ? Number(actualCost) : grandTotal
   const expectedProfit = quoteRevenue - costToUse // Profit excludes shipping
   const profitMarginPercent = quoteRevenue > 0 ? (expectedProfit / quoteRevenue) * 100 : 0
+
+  /* ------------------------- מעקב תשלום לאירוע שהושלם ------------------------ */
+
+  const formatHebrewDate = (iso: string) =>
+    iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('he-IL') : ''
+
+  const paymentTaskTitle = `תשלום ${clientName.trim()} ${formatHebrewDate(eventDate)}`.trim()
+
+  // פירוט ההודעה של משימת התשלום: קייטרינג, משלוח והסכום המשוקלל.
+  const paymentTaskDetails = [
+    `קייטרינג - ₪${quoteRevenue.toFixed(2)}`,
+    deliveryType === 'delivery' ? `משלוח - ₪${quoteShipping.toFixed(2)}` : 'משלוח - באיסוף עצמי',
+    `סה"כ - ₪${quoteGrandTotal.toFixed(2)}`,
+  ].join('\n')
+
+  // נבחר ל"הושלם": שואלים פעם אחת אם לפתוח מעקב תשלום — ורק אם עוד אין אחד.
+  const handleStatusSelect = (nextStatus: string) => {
+    if (isLocked) return
+    setStatus(nextStatus)
+
+    // חזרה לסטטוס אחר מבטלת מעקב שטרם נשמר, ומאפשרת לשאול שוב בפעם הבאה.
+    if (nextStatus !== 'Completed') {
+      setPendingPaymentDue(null)
+      setPaymentAskDismissed(false)
+      setPaymentAskOpen(false)
+      setPaymentDateOpen(false)
+      return
+    }
+
+    if (
+      nextStatus === 'Completed' &&
+      !paymentTaskExists &&
+      !pendingPaymentDue &&
+      !paymentAskDismissed
+    ) {
+      setPaymentAskOpen(true)
+    }
+  }
+
+  const confirmPaymentTracking = () => {
+    setPaymentAskOpen(false)
+    // ברירת מחדל נוחה: תאריך האירוע עצמו, ומשם המשתמש מזיז קדימה.
+    setPaymentDateInput(eventDate || new Date().toLocaleDateString('en-CA'))
+    setPaymentDateError(null)
+    setPaymentDateOpen(true)
+  }
+
+  const declinePaymentTracking = () => {
+    setPaymentAskOpen(false)
+    setPaymentAskDismissed(true)
+  }
+
+  const submitPaymentDate = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!paymentDateInput) {
+      setPaymentDateError('יש לבחור תאריך תשלום')
+      return
+    }
+    setPendingPaymentDue(paymentDateInput)
+    setPaymentDateOpen(false)
+  }
+
+  /** מזהה קטגוריית "קייטרינג" בלוח המשימות, ויוצר אותה אם היא נמחקה. */
+  const resolvePaymentCategoryId = async (): Promise<string> => {
+    const { data: existing, error: findError } = await supabase
+      .from('task_categories')
+      .select('id')
+      .eq('name', PAYMENT_TASK_CATEGORY)
+      .limit(1)
+      .maybeSingle()
+
+    if (findError) throw findError
+    if (existing) return existing.id
+
+    const { data: positionRow } = await supabase
+      .from('task_categories')
+      .select('position')
+      .order('position', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const { data: created, error: createError } = await supabase
+      .from('task_categories')
+      .insert({
+        name: PAYMENT_TASK_CATEGORY,
+        color: 'gold',
+        position: (positionRow?.position ?? -1) + 1,
+      })
+      .select('id')
+      .single()
+
+    if (createError) throw createError
+    return created.id
+  }
+
+  /**
+   * נקרא רק אחרי שהאירוע כבר נשמר, כדי שלמשימה יהיה order_id אמיתי.
+   * שכבת ההגנה מכפילות היא משולשת: בדיקה לפני ההוספה, אינדקס ייחודי חלקי
+   * במסד, ובליעה שקטה של הפרת הייחודיות אם שני טאבים רצו במקביל.
+   */
+  const createPaymentTask = async (targetOrderId: string, dueDate: string) => {
+    // האירוע כבר נשמר בשלב הזה, ולכן כשל כאן חייב להיאמר במפורש כדי שלא ייקרא
+    // כאילו שמירת האירוע עצמה נכשלה.
+    const fail = (cause: unknown): never => {
+      const detail =
+        cause && typeof cause === 'object' && 'message' in cause
+          ? String((cause as { message: unknown }).message)
+          : ''
+      throw new Error(
+        `האירוע נשמר, אך יצירת משימת מעקב התשלום נכשלה${detail ? `: ${detail}` : ''}`
+      )
+    }
+
+    const { data: existing, error: existingError } = await supabase
+      .from('tasks')
+      .select('id')
+      .eq('order_id', targetOrderId)
+      .maybeSingle()
+
+    if (existingError) fail(existingError)
+    if (existing) {
+      setPaymentTaskExists(true)
+      return
+    }
+
+    let categoryId: string
+    try {
+      categoryId = await resolvePaymentCategoryId()
+    } catch (err) {
+      return fail(err)
+    }
+
+    const { error: insertError } = await supabase.from('tasks').insert({
+      category_id: categoryId,
+      title: paymentTaskTitle,
+      details: paymentTaskDetails,
+      status: 'open',
+      priority: 'normal',
+      due_date: dueDate,
+      order_id: targetOrderId,
+    })
+
+    // 23505 = הפרת האינדקס הייחודי, כלומר מישהו אחר כבר יצר את המשימה.
+    if (insertError && insertError.code !== '23505') fail(insertError)
+
+    setPaymentTaskExists(true)
+  }
 
   // Add a dish row
   const addDishRow = () => {
@@ -502,6 +679,12 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
 
       if (insertDishesError) throw insertDishesError
 
+      // מעקב התשלום נוצר רק אחרי שהאירוע נשמר, כדי שיהיה לו order_id לקשר אליו.
+      if (pendingPaymentDue && finalOrderId) {
+        await createPaymentTask(finalOrderId, pendingPaymentDue)
+        setPendingPaymentDue(null)
+      }
+
       router.push('/orders')
       router.refresh()
     } catch (err: unknown) {
@@ -587,6 +770,11 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
         .insert(mappedOrderDishes)
 
       if (insertDishesError) throw insertDishesError
+
+      if (pendingPaymentDue && finalOrderId) {
+        await createPaymentTask(finalOrderId, pendingPaymentDue)
+        setPendingPaymentDue(null)
+      }
 
       // Open summary page in a new window/tab
       window.open(`/orders/${finalOrderId}/client-summary`, '_blank')
@@ -867,7 +1055,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                       key={opt.value}
                       type="button"
                       disabled={isLocked}
-                      onClick={() => !isLocked && setStatus(opt.value)}
+                      onClick={() => handleStatusSelect(opt.value)}
                       className={`px-5 py-2.5 text-xs font-bold rounded-lg border transition-all cursor-pointer ${isSelected
                           ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
                           : 'bg-black/40 text-zinc-400 border-zinc-900 hover:text-zinc-200'
@@ -878,6 +1066,32 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                   )
                 })}
               </div>
+
+              {pendingPaymentDue && (
+                <div className="mt-3 p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-xl flex items-center gap-2.5">
+                  <Wallet className="h-4 w-4 text-emerald-400 shrink-0" />
+                  <p className="text-[11px] font-bold text-emerald-400 leading-snug">
+                    משימת מעקב תשלום תיפתח בשמירת האירוע — עד {formatHebrewDate(pendingPaymentDue)}
+                  </p>
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => setPendingPaymentDue(null)}
+                    className="mr-auto ml-0 text-[10px] font-bold text-zinc-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    בטל
+                  </button>
+                </div>
+              )}
+
+              {paymentTaskExists && !pendingPaymentDue && (
+                <div className="mt-3 p-3 bg-zinc-900/40 border border-zinc-800 rounded-xl flex items-center gap-2.5">
+                  <Wallet className="h-4 w-4 text-zinc-400 shrink-0" />
+                  <p className="text-[11px] font-bold text-zinc-400 leading-snug">
+                    כבר קיימת משימת מעקב תשלום לאירוע זה בלוח המשימות.
+                  </p>
+                </div>
+              )}
             </div>
             </div>
             )}
@@ -1514,6 +1728,112 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
 
       </div>
 
+
+      {/* שלב 1: האם לנהל מעקב תשלום על האירוע שהושלם */}
+      {paymentAskOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs" dir="rtl">
+          <div className="w-full max-w-md bg-zinc-950 border border-amber-500/20 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 text-right flex gap-4 items-start">
+              <div className="p-2 bg-zinc-900/60 border border-zinc-800 rounded-xl shrink-0">
+                <Wallet className="h-6 w-6 text-amber-500" />
+              </div>
+              <div className="space-y-2 flex-1">
+                <h3 className="text-base font-bold text-white leading-tight">מעקב תשלום</h3>
+                <p className="text-zinc-400 text-xs font-medium leading-relaxed">
+                  האירוע סומן כהושלם. לפתוח משימת מעקב תשלום עבור {clientName.trim() || 'הלקוח'}?
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 p-6 pt-0">
+              <button
+                type="button"
+                onClick={declinePaymentTracking}
+                className="px-5 py-2.5 bg-zinc-950 border border-zinc-800 hover:bg-zinc-900 text-zinc-300 font-bold rounded-xl text-xs transition-all cursor-pointer"
+              >
+                לא, תודה
+              </button>
+              <button
+                type="button"
+                onClick={confirmPaymentTracking}
+                className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-yellow-600 to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-white font-bold rounded-xl text-xs shadow-md transition-all cursor-pointer"
+              >
+                <Check className="h-4 w-4" />
+                כן, נהל מעקב
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* שלב 2: מתי מועד התשלום */}
+      {paymentDateOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs" dir="rtl">
+          <div className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="h-14 flex items-center justify-between px-6 border-b border-zinc-900">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <CalendarClock className="h-5 w-5 text-amber-500" />
+                מועד התשלום
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPaymentDateOpen(false)}
+                className="p-1 hover:bg-zinc-900 text-zinc-400 hover:text-white rounded-lg transition-all cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {paymentDateError && (
+              <div className="p-4 bg-red-500/10 border-b border-red-500/20 text-red-400 text-xs font-semibold text-right">
+                {paymentDateError}
+              </div>
+            )}
+
+            <form onSubmit={submitPaymentDate} className="p-6 space-y-4 text-right">
+              <div>
+                <label className="block text-xs font-extrabold uppercase tracking-wider text-zinc-500 mb-2">
+                  עד מתי לשלם?
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={paymentDateInput}
+                  onChange={(e) => {
+                    setPaymentDateInput(e.target.value)
+                    setPaymentDateError(null)
+                  }}
+                  className="w-full px-4 py-2.5 bg-black border border-zinc-900 rounded-xl text-white text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all outline-none font-semibold"
+                />
+              </div>
+
+              <div className="p-3 bg-black/40 border border-zinc-900 rounded-xl space-y-1">
+                <p className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-500">תצוגה מקדימה של המשימה</p>
+                <p className="text-xs font-bold text-zinc-200">{paymentTaskTitle}</p>
+                <p className="text-[11px] font-medium text-zinc-400 whitespace-pre-wrap leading-relaxed">
+                  {paymentTaskDetails}
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2 border-t border-zinc-900">
+                <button
+                  type="button"
+                  onClick={() => setPaymentDateOpen(false)}
+                  className="px-4 py-2.5 bg-zinc-950 border border-zinc-800 hover:bg-zinc-900 text-zinc-300 font-bold rounded-xl text-xs transition-all cursor-pointer"
+                >
+                  ביטול
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-yellow-600 to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-white font-bold rounded-xl text-xs shadow-md transition-all cursor-pointer"
+                >
+                  <Check className="h-4 w-4" />
+                  אשר
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {saving && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">

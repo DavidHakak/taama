@@ -254,6 +254,8 @@ export const tasks = pgTable('tasks', {
   priority: text('priority').notNull().default('normal'), // 'low' | 'normal' | 'high'
   due_date: date('due_date'),
   completed_at: timestamp('completed_at', { withTimezone: true }),
+  // מקושר לאירוע קייטרינג כשהמשימה היא מעקב תשלום (אינדקס ייחודי חלקי מונע כפילות)
+  order_id: uuid('order_id').references(() => orders.id, { onDelete: 'set null' }),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })

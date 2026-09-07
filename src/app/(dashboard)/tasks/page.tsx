@@ -57,6 +57,8 @@ interface Task {
   priority: TaskPriority
   due_date: string | null
   completed_at: string | null
+  /** מקושר לאירוע קייטרינג כשהמשימה נוצרה כמעקב תשלום. */
+  order_id: string | null
   created_at: string
   updated_at: string
 }

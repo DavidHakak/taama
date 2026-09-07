@@ -8,6 +8,26 @@ import { User, Mail, Lock, Phone, Loader2, ArrowLeft, Eye, EyeOff, KeyRound } fr
 
 type AuthMode = 'signin' | 'signup' | 'forgot'
 
+// Supabase מחזיר את כל סיבות הדחייה כשגיאה אחת. מיפוי מפורש כדי שהמשתמש
+// (והדיבוג) יראו את הסיבה האמיתית ולא רק "פרטי התחברות שגויים".
+function signInErrorMessage(error: { code?: string; status?: number; message: string }): string {
+  switch (error.code) {
+    case 'invalid_credentials':
+      return 'פרטי ההתחברות שגויים. אנא נסה שנית.'
+    case 'email_not_confirmed':
+      return 'החשבון עדיין לא אומת. בדוק את תיבת המייל שלך ולחץ על קישור האישור.'
+    case 'user_banned':
+      return 'החשבון חסום. אנא פנה אלינו.'
+    case 'over_request_rate_limit':
+    case 'over_email_send_rate_limit':
+      return 'יותר מדי ניסיונות. נסה שוב בעוד מספר דקות.'
+  }
+  if (error.status === 429) {
+    return 'יותר מדי ניסיונות. נסה שוב בעוד מספר דקות.'
+  }
+  return `ההתחברות נכשלה: ${error.message}`
+}
+
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -119,7 +139,7 @@ function LoginForm() {
         })
 
         if (signInError) {
-          setError('פרטי ההתחברות שגויים. אנא נסה שנית.')
+          setError(signInErrorMessage(signInError))
         } else {
           router.push(redirectTo)
           router.refresh()
