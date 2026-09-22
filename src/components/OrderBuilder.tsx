@@ -28,7 +28,7 @@ import {
 import Link from 'next/link'
 import { CustomSelect } from '@/components/ui/CustomSelect'
 import { AnchoredDropdown } from '@/components/ui/AnchoredDropdown'
-import { DEFAULT_DISH_CATEGORIES, collectCategories, inCategory } from '@/utils/categories'
+import { DEFAULT_DISH_CATEGORIES, collectCategories, inCategory, normalizeCategory } from '@/utils/categories'
 
 interface Dish {
   id: string
@@ -1273,7 +1273,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
             {openSections.dishes && (
             <div className="px-6 pb-6 space-y-5">
 
-            <div className="space-y-3">
+            <div className="space-y-5">
               {(() => {
                 const startersCount = selectedDishes.filter((sd) => {
                   const d = dishesList.find((dish) => dish.id === sd.dishId)
@@ -1285,7 +1285,29 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                   return d?.category === 'עיקריות'
                 }).length
 
-                return selectedDishes.map((item, idx) => {
+                // השורות מקובצות לפי קטגוריית המנה כדי שהרשימה תהיה קריאה.
+                // idx המקורי נשמר לכל שורה, כי עליו נשענים עדכון/מחיקה ופתיחת הבורר.
+                const rows = selectedDishes.map((item, idx) => ({
+                  item,
+                  idx,
+                  dish: dishesList.find((d) => d.id === item.dishId),
+                }))
+                const assigned = rows.filter((r) => r.dish)
+                const groups = collectCategories(
+                  assigned.map((r) => r.dish!),
+                  DEFAULT_DISH_CATEGORIES
+                ).map((category) => ({
+                  category,
+                  rows: assigned.filter((r) => normalizeCategory(r.dish!.category) === category),
+                }))
+
+                // שורות שטרם נבחרה בהן מנה יורדות לסוף, ליד כפתור ההוספה
+                const unassigned = rows.filter((r) => !r.dish)
+                if (unassigned.length > 0) {
+                  groups.push({ category: 'טרם נבחרה מנה', rows: unassigned })
+                }
+
+                const renderRow = ({ item, idx }: (typeof rows)[number]) => {
                   // Calculate single line dish plate cost
                   const dishObj = dishesList.find((d) => d.id === item.dishId)
                   const dishCost = dishObj
@@ -1423,7 +1445,20 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                       )}
                     </div>
                   )
-                })
+                }
+
+                return groups.map((group) => (
+                  <div key={group.category} className="space-y-2">
+                    <div className="flex items-center gap-2 px-1">
+                      <span className="text-[11px] font-black text-amber-500/80">{group.category}</span>
+                      <span className="text-[10px] font-bold text-zinc-500 bg-zinc-900/60 px-2 py-0.5 rounded-full border border-zinc-900">
+                        {group.rows.length}
+                      </span>
+                      <span className="flex-1 h-px bg-zinc-900" />
+                    </div>
+                    <div className="space-y-3">{group.rows.map(renderRow)}</div>
+                  </div>
+                ))
               })()}
             </div>
 
