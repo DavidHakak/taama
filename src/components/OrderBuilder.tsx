@@ -853,125 +853,89 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
       )}
 
       {/* Main Grid split layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+      {/* One column, so the sections read in a single running order */}
+      <div className="space-y-6 text-right">
 
-        {/* Left Form: Details & Dish mapping */}
-        <form onSubmit={handleSubmit} className="lg:col-span-2 space-y-6 text-right">
+        {/* Profitability & pricing metrics — above every section */}
+        <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 shadow-xl relative overflow-hidden space-y-4">
+          <div className="absolute top-0 left-0 p-4 opacity-5 pointer-events-none">
+            <DollarSign className="h-24 w-24 text-amber-500" />
+          </div>
 
-          {/* Section 0: Preparation Tracking (personal) — hidden once completed/paid */}
-          {orderId && status !== 'Completed' && status !== 'Paid' && (() => {
-            const prepDishes = selectedDishes
-              .filter((sd) => sd.dishId)
-              .map((sd) => ({ ...sd, dish: dishesList.find((d) => d.id === sd.dishId) }))
-              .filter((x) => x.dish) as (SelectedDishItem & { dish: Dish })[]
-
-            const totalPrep = prepDishes.length
-            const donePrep = prepDishes.filter((x) => x.isPrepared).length
-            const pct = totalPrep > 0 ? Math.round((donePrep / totalPrep) * 100) : 0
-
-            const grouped = CATEGORIES
-              .map((cat) => ({ cat, items: prepDishes.filter((x) => x.dish.category === cat) }))
-              .filter((g) => g.items.length > 0)
-            const otherItems = prepDishes.filter((x) => !CATEGORIES.includes(x.dish.category))
-            if (otherItems.length > 0) grouped.push({ cat: 'אחר', items: otherItems })
-
-            return (
-              <div className="bg-zinc-950 border border-amber-500/20 rounded-2xl shadow-xl overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => toggleSection('prep')}
-                  className="w-full flex items-center justify-between gap-3 p-6 text-right cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <ChefHat className="h-5 w-5 text-amber-500 shrink-0" />
-                    <div>
-                      <h2 className="text-sm font-bold uppercase tracking-wider text-amber-400">מעקב הכנה</h2>
-                      <p className="text-xxs text-zinc-500 mt-0.5">סמן אילו מנות כבר הוכנו ומה עוד נשאר</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="text-xs font-black font-mono text-zinc-200">{donePrep}/{totalPrep} מוכן</span>
-                    {openSections.prep ? <ChevronUp className="h-4 w-4 text-zinc-500" /> : <ChevronDown className="h-4 w-4 text-zinc-500" />}
-                  </div>
-                </button>
-
-                {openSections.prep && (
-                  <div className="px-6 pb-6 space-y-5">
-                    {totalPrep === 0 ? (
-                      <p className="text-zinc-600 text-xs py-2 text-center">טרם נבחרו מנות להזמנה זו. הוסף מנות ושמור כדי לעקוב אחר ההכנה.</p>
-                    ) : (
-                      <>
-                        {/* Overall progress */}
-                        <div className="space-y-1.5">
-                          <div className="flex justify-between text-xxs font-bold">
-                            <span className="text-zinc-400">התקדמות כללית</span>
-                            <span className="font-mono text-zinc-200">{pct}%</span>
-                          </div>
-                          <div className="w-full bg-zinc-900 h-2 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all duration-300 ${pct === 100 ? 'bg-emerald-500' : 'bg-amber-500'}`}
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Grouped by category */}
-                        <div className="space-y-4">
-                          {grouped.map((g) => {
-                            const catDone = g.items.filter((x) => x.isPrepared).length
-                            return (
-                              <div key={g.cat} className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <h3 className="text-xxs font-extrabold uppercase tracking-wider text-zinc-500">{g.cat}</h3>
-                                  <span className="text-[10px] font-mono text-zinc-500">{catDone}/{g.items.length}</span>
-                                </div>
-                                <div className="space-y-1.5">
-                                  {g.items.map((x) => {
-                                    const isSavingThis = prepSavingDishId === x.dishId
-                                    return (
-                                      <button
-                                        key={x.dishId}
-                                        type="button"
-                                        disabled={saving || prepSavingDishId !== null}
-                                        onClick={() => togglePrepared(x.dishId, !x.isPrepared)}
-                                        className={`w-full flex items-center gap-3 p-3 rounded-xl border text-right transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
-                                          x.isPrepared
-                                            ? 'bg-emerald-500/5 border-emerald-500/20 hover:bg-emerald-500/10'
-                                            : 'bg-zinc-900/30 border-zinc-800/50 hover:bg-zinc-900/50'
-                                        }`}
-                                      >
-                                        <span
-                                          className={`h-5 w-5 shrink-0 rounded-md border flex items-center justify-center transition-all ${
-                                            x.isPrepared ? 'bg-emerald-500 border-emerald-500' : 'bg-black border-zinc-700'
-                                          }`}
-                                        >
-                                          {isSavingThis ? (
-                                            <Loader2 className="h-3 w-3 animate-spin text-white" />
-                                          ) : (
-                                            x.isPrepared && <Check className="h-3.5 w-3.5 text-white" />
-                                          )}
-                                        </span>
-                                        <span className={`text-sm font-bold flex-1 ${x.isPrepared ? 'text-emerald-300 line-through decoration-emerald-500/40' : 'text-zinc-200'}`}>
-                                          {x.dish.name}
-                                        </span>
-                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ${x.isPrepared ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-500 bg-zinc-900'}`}>
-                                          {x.isPrepared ? 'הוכן' : 'נשאר'}
-                                        </span>
-                                      </button>
-                                    )
-                                  })}
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </>
-                    )}
-                  </div>
+          <div>
+            <span className="block text-xxs font-bold text-zinc-400 uppercase tracking-wider mb-1">
+              {actualCost !== '' ? 'מדדי רווחיות ותמחור בפועל (ללא משלוח)' : 'מדדי רווחיות ותמחור מוערכים (ללא משלוח)'}
+            </span>
+            <div className="grid grid-cols-2 gap-4 mt-3">
+              <div>
+                <span className="block text-[10px] text-zinc-500 font-semibold">סה"כ הכנסה צפויה</span>
+                <span className="text-lg font-black text-emerald-400 font-mono">₪{quoteRevenue.toFixed(2)}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] text-zinc-500 font-semibold">
+                  {actualCost !== '' ? 'עלות מזון בפועל' : 'עלות חומרי גלם (משוער)'}
+                </span>
+                <span className="text-lg font-black text-rose-400 font-mono">
+                  ₪{costToUse.toFixed(2)}
+                </span>
+                {actualCost !== '' && (
+                  <span className="block text-[9px] text-zinc-500">
+                    משוער: ₪{grandTotal.toFixed(2)}
+                  </span>
                 )}
               </div>
-            )
-          })()}
+            </div>
+          </div>
+
+          <div className="border-t border-zinc-900 pt-3 flex items-center justify-between">
+            <div>
+              <span className="block text-[10px] text-zinc-500 font-semibold">
+                {actualCost !== '' ? 'רווח גולמי בפועל' : 'רווח גולמי מוערך'}
+              </span>
+              <span className={`text-xl font-black font-mono ${expectedProfit >= 0 ? 'text-amber-500' : 'text-red-500'}`}>
+                ₪{expectedProfit.toFixed(2)}
+              </span>
+            </div>
+            <div className="text-left">
+              <span className="block text-[10px] text-zinc-500 font-semibold">
+                {actualCost !== '' ? 'אחוז רווח בפועל' : 'אחוז רווח מוערך'}
+              </span>
+              <span className={`text-base font-black font-mono ${profitMarginPercent >= 30 ? 'text-emerald-400' : profitMarginPercent >= 15 ? 'text-amber-400' : 'text-red-400'}`}>
+                {profitMarginPercent.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+
+          {/* Profit Margin Progress Bar */}
+          <div className="w-full bg-zinc-900 h-2 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${
+                profitMarginPercent >= 30
+                  ? 'bg-emerald-500'
+                  : profitMarginPercent >= 15
+                  ? 'bg-amber-500'
+                  : 'bg-red-500'
+              }`}
+              style={{ width: `${Math.min(100, Math.max(0, profitMarginPercent))}%` }}
+            />
+          </div>
+
+          {/* Client Total and Shipping breakdown */}
+          <div className="border-t border-zinc-900 pt-3 grid grid-cols-2 gap-4">
+            <div>
+              <span className="block text-[10px] text-zinc-500 font-semibold">עלות משלוח (בנפרד)</span>
+              <span className="text-sm font-bold text-zinc-300 font-mono">
+                {quoteShipping > 0 ? `₪${quoteShipping.toFixed(2)}` : 'אין משלוח'}
+              </span>
+            </div>
+            <div className="text-left">
+              <span className="block text-[10px] text-zinc-500 font-semibold">סה"כ לתשלום לקוח</span>
+              <span className="text-sm font-bold text-zinc-300 font-mono">₪{quoteGrandTotal.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-6 text-right">
 
           {/* Section 1: Order Details */}
           <div className="bg-zinc-950 border border-zinc-900 rounded-2xl shadow-xl overflow-hidden">
@@ -1100,7 +1064,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
             )}
           </div>
 
-          {/* Section 3: Pricing & Revenue */}
+          {/* Section 2: Pricing & Revenue */}
           <div className="bg-zinc-950 border border-zinc-900 rounded-2xl shadow-xl overflow-hidden">
             <button
               type="button"
@@ -1261,7 +1225,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
             )}
           </div>
 
-          {/* Section 2: Dish Selector */}
+          {/* Section 3: Dish Selector */}
           <div className="bg-zinc-950 border border-zinc-900 rounded-2xl shadow-xl overflow-hidden">
             <button
               type="button"
@@ -1479,134 +1443,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
             )}
           </div>
 
-
-
-          {/* Form Actions */}
-          <div className="flex items-center justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={() => {
-                if (isLocked) {
-                  window.open(`/orders/${orderId}/client-summary`, '_blank')
-                } else {
-                  handleSaveAndGenerateSummary()
-                }
-              }}
-              disabled={saving}
-              className="inline-flex items-center justify-center gap-1.5 px-5 py-3 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 text-zinc-300 hover:text-white font-bold rounded-xl text-xs shadow-md transition-all cursor-pointer mr-auto ml-0 disabled:opacity-50"
-            >
-              {saving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <span>הפקת סיכום ללקוח</span>
-              )}
-            </button>
-
-            <Link
-              href="/orders"
-              className="px-5 py-3 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-semibold rounded-xl text-xs transition-all"
-            >
-              חזרה להזמנות
-            </Link>
-            {(!isLocked || orderId !== undefined) && (
-              <button
-                type="submit"
-                disabled={saving}
-                className="inline-flex items-center justify-center gap-1.5 px-6 py-3 bg-gradient-to-r from-yellow-600 via-amber-500 to-yellow-600 hover:from-yellow-500 hover:via-amber-600 hover:to-yellow-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-amber-500/10 transition-all cursor-pointer disabled:opacity-50"
-              >
-                {saving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Check className="h-4 w-4" />
-                )}
-                <span>{isLocked ? 'עדכן עלות בפועל' : (orderId ? 'שמור שינויים' : 'צור הזמנה')}</span>
-              </button>
-            )}
-          </div>
-        </form>
-
-        {/* Right Side: Cost Summary & Real-time Aggregation List */}
-        <div className="space-y-6 text-right">
-          {/* Summary Box */}
-          <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 shadow-xl relative overflow-hidden space-y-4">
-            <div className="absolute top-0 left-0 p-4 opacity-5 pointer-events-none">
-              <DollarSign className="h-24 w-24 text-amber-500" />
-            </div>
-
-            <div>
-              <span className="block text-xxs font-bold text-zinc-400 uppercase tracking-wider mb-1">
-                {actualCost !== '' ? 'מדדי רווחיות ותמחור בפועל (ללא משלוח)' : 'מדדי רווחיות ותמחור מוערכים (ללא משלוח)'}
-              </span>
-              <div className="grid grid-cols-2 gap-4 mt-3">
-                <div>
-                  <span className="block text-[10px] text-zinc-500 font-semibold">סה"כ הכנסה צפויה</span>
-                  <span className="text-lg font-black text-emerald-400 font-mono">₪{quoteRevenue.toFixed(2)}</span>
-                </div>
-                <div>
-                  <span className="block text-[10px] text-zinc-500 font-semibold">
-                    {actualCost !== '' ? 'עלות מזון בפועל' : 'עלות חומרי גלם (משוער)'}
-                  </span>
-                  <span className="text-lg font-black text-rose-400 font-mono">
-                    ₪{costToUse.toFixed(2)}
-                  </span>
-                  {actualCost !== '' && (
-                    <span className="block text-[9px] text-zinc-500">
-                      משוער: ₪{grandTotal.toFixed(2)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-zinc-900 pt-3 flex items-center justify-between">
-              <div>
-                <span className="block text-[10px] text-zinc-500 font-semibold">
-                  {actualCost !== '' ? 'רווח גולמי בפועל' : 'רווח גולמי מוערך'}
-                </span>
-                <span className={`text-xl font-black font-mono ${expectedProfit >= 0 ? 'text-amber-500' : 'text-red-500'}`}>
-                  ₪{expectedProfit.toFixed(2)}
-                </span>
-              </div>
-              <div className="text-left">
-                <span className="block text-[10px] text-zinc-500 font-semibold">
-                  {actualCost !== '' ? 'אחוז רווח בפועל' : 'אחוז רווח מוערך'}
-                </span>
-                <span className={`text-base font-black font-mono ${profitMarginPercent >= 30 ? 'text-emerald-400' : profitMarginPercent >= 15 ? 'text-amber-400' : 'text-red-400'}`}>
-                  {profitMarginPercent.toFixed(1)}%
-                </span>
-              </div>
-            </div>
-
-            {/* Profit Margin Progress Bar */}
-            <div className="w-full bg-zinc-900 h-2 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-300 ${
-                  profitMarginPercent >= 30
-                    ? 'bg-emerald-500'
-                    : profitMarginPercent >= 15
-                    ? 'bg-amber-500'
-                    : 'bg-red-500'
-                }`}
-                style={{ width: `${Math.min(100, Math.max(0, profitMarginPercent))}%` }}
-              />
-            </div>
-
-            {/* Client Total and Shipping breakdown */}
-            <div className="border-t border-zinc-900 pt-3 grid grid-cols-2 gap-4">
-              <div>
-                <span className="block text-[10px] text-zinc-500 font-semibold">עלות משלוח (בנפרד)</span>
-                <span className="text-sm font-bold text-zinc-300 font-mono">
-                  {quoteShipping > 0 ? `₪${quoteShipping.toFixed(2)}` : 'אין משלוח'}
-                </span>
-              </div>
-              <div className="text-left">
-                <span className="block text-[10px] text-zinc-500 font-semibold">סה"כ לתשלום לקוח</span>
-                <span className="text-sm font-bold text-zinc-300 font-mono">₪{quoteGrandTotal.toFixed(2)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Live Grocery requirements + purchase tracking */}
+          {/* Section 4: Live Grocery requirements + purchase tracking */}
           {(() => {
             const purchasedCount = aggregatedIngredients.filter((i) =>
               purchasedIngredients.has(i.ingredientId)
@@ -1775,8 +1612,165 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
               </div>
             )
           })()}
-        </div>
 
+          {/* Section 5: Preparation Tracking (personal) — hidden once completed/paid */}
+          {orderId && status !== 'Completed' && status !== 'Paid' && (() => {
+            const prepDishes = selectedDishes
+              .filter((sd) => sd.dishId)
+              .map((sd) => ({ ...sd, dish: dishesList.find((d) => d.id === sd.dishId) }))
+              .filter((x) => x.dish) as (SelectedDishItem & { dish: Dish })[]
+
+            const totalPrep = prepDishes.length
+            const donePrep = prepDishes.filter((x) => x.isPrepared).length
+            const pct = totalPrep > 0 ? Math.round((donePrep / totalPrep) * 100) : 0
+
+            const grouped = CATEGORIES
+              .map((cat) => ({ cat, items: prepDishes.filter((x) => x.dish.category === cat) }))
+              .filter((g) => g.items.length > 0)
+            const otherItems = prepDishes.filter((x) => !CATEGORIES.includes(x.dish.category))
+            if (otherItems.length > 0) grouped.push({ cat: 'אחר', items: otherItems })
+
+            return (
+              <div className="bg-zinc-950 border border-amber-500/20 rounded-2xl shadow-xl overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => toggleSection('prep')}
+                  className="w-full flex items-center justify-between gap-3 p-6 text-right cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <ChefHat className="h-5 w-5 text-amber-500 shrink-0" />
+                    <div>
+                      <h2 className="text-sm font-bold uppercase tracking-wider text-amber-400">מעקב הכנה</h2>
+                      <p className="text-xxs text-zinc-500 mt-0.5">סמן אילו מנות כבר הוכנו ומה עוד נשאר</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-xs font-black font-mono text-zinc-200">{donePrep}/{totalPrep} מוכן</span>
+                    {openSections.prep ? <ChevronUp className="h-4 w-4 text-zinc-500" /> : <ChevronDown className="h-4 w-4 text-zinc-500" />}
+                  </div>
+                </button>
+
+                {openSections.prep && (
+                  <div className="px-6 pb-6 space-y-5">
+                    {totalPrep === 0 ? (
+                      <p className="text-zinc-600 text-xs py-2 text-center">טרם נבחרו מנות להזמנה זו. הוסף מנות ושמור כדי לעקוב אחר ההכנה.</p>
+                    ) : (
+                      <>
+                        {/* Overall progress */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between text-xxs font-bold">
+                            <span className="text-zinc-400">התקדמות כללית</span>
+                            <span className="font-mono text-zinc-200">{pct}%</span>
+                          </div>
+                          <div className="w-full bg-zinc-900 h-2 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-300 ${pct === 100 ? 'bg-emerald-500' : 'bg-amber-500'}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Grouped by category */}
+                        <div className="space-y-4">
+                          {grouped.map((g) => {
+                            const catDone = g.items.filter((x) => x.isPrepared).length
+                            return (
+                              <div key={g.cat} className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <h3 className="text-xxs font-extrabold uppercase tracking-wider text-zinc-500">{g.cat}</h3>
+                                  <span className="text-[10px] font-mono text-zinc-500">{catDone}/{g.items.length}</span>
+                                </div>
+                                <div className="space-y-1.5">
+                                  {g.items.map((x) => {
+                                    const isSavingThis = prepSavingDishId === x.dishId
+                                    return (
+                                      <button
+                                        key={x.dishId}
+                                        type="button"
+                                        disabled={saving || prepSavingDishId !== null}
+                                        onClick={() => togglePrepared(x.dishId, !x.isPrepared)}
+                                        className={`w-full flex items-center gap-3 p-3 rounded-xl border text-right transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
+                                          x.isPrepared
+                                            ? 'bg-emerald-500/5 border-emerald-500/20 hover:bg-emerald-500/10'
+                                            : 'bg-zinc-900/30 border-zinc-800/50 hover:bg-zinc-900/50'
+                                        }`}
+                                      >
+                                        <span
+                                          className={`h-5 w-5 shrink-0 rounded-md border flex items-center justify-center transition-all ${
+                                            x.isPrepared ? 'bg-emerald-500 border-emerald-500' : 'bg-black border-zinc-700'
+                                          }`}
+                                        >
+                                          {isSavingThis ? (
+                                            <Loader2 className="h-3 w-3 animate-spin text-white" />
+                                          ) : (
+                                            x.isPrepared && <Check className="h-3.5 w-3.5 text-white" />
+                                          )}
+                                        </span>
+                                        <span className={`text-sm font-bold flex-1 ${x.isPrepared ? 'text-emerald-300 line-through decoration-emerald-500/40' : 'text-zinc-200'}`}>
+                                          {x.dish.name}
+                                        </span>
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ${x.isPrepared ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-500 bg-zinc-900'}`}>
+                                          {x.isPrepared ? 'הוכן' : 'נשאר'}
+                                        </span>
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
+          {/* Form Actions */}
+          <div className="flex items-center justify-end gap-3 pt-4">
+            <button
+              type="button"
+              onClick={() => {
+                if (isLocked) {
+                  window.open(`/orders/${orderId}/client-summary`, '_blank')
+                } else {
+                  handleSaveAndGenerateSummary()
+                }
+              }}
+              disabled={saving}
+              className="inline-flex items-center justify-center gap-1.5 px-5 py-3 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 text-zinc-300 hover:text-white font-bold rounded-xl text-xs shadow-md transition-all cursor-pointer mr-auto ml-0 disabled:opacity-50"
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <span>הפקת סיכום ללקוח</span>
+              )}
+            </button>
+
+            <Link
+              href="/orders"
+              className="px-5 py-3 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-semibold rounded-xl text-xs transition-all"
+            >
+              חזרה להזמנות
+            </Link>
+            {(!isLocked || orderId !== undefined) && (
+              <button
+                type="submit"
+                disabled={saving}
+                className="inline-flex items-center justify-center gap-1.5 px-6 py-3 bg-gradient-to-r from-yellow-600 via-amber-500 to-yellow-600 hover:from-yellow-500 hover:via-amber-600 hover:to-yellow-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-amber-500/10 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
+                <span>{isLocked ? 'עדכן עלות בפועל' : (orderId ? 'שמור שינויים' : 'צור הזמנה')}</span>
+              </button>
+            )}
+          </div>
+        </form>
       </div>
 
 
