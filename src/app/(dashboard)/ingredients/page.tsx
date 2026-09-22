@@ -16,6 +16,12 @@ import {
   Scale,
 } from 'lucide-react'
 import { CustomSelect } from '@/components/ui/CustomSelect'
+import {
+  DEFAULT_INGREDIENT_CATEGORIES,
+  collectCategories,
+  inCategory,
+  normalizeCategory,
+} from '@/utils/categories'
 import { useCustomDialogs } from '@/hooks/useCustomDialogs'
 
 interface Ingredient {
@@ -26,16 +32,6 @@ interface Ingredient {
   category: string
   created_at: string
 }
-
-const INGREDIENT_CATEGORIES = [
-  "ירקות ופירות",
-  "בשרים ודגים",
-  "תבלינים",
-  "מוצרים יבשים/מזווה",
-  "מוצרי חלב",
-  "קפואים",
-  "אחר"
-]
 
 export default function IngredientsPage() {
   const supabase = createClient()
@@ -86,7 +82,7 @@ export default function IngredientsPage() {
     setFormName('')
     setFormUnit('kg')
     setFormCost('')
-    setFormCategory('ירקות ופירות')
+    setFormCategory(DEFAULT_INGREDIENT_CATEGORIES[0])
     setIsModalOpen(true)
   }
 
@@ -97,7 +93,7 @@ export default function IngredientsPage() {
     setFormName(ingredient.name)
     setFormUnit(ingredient.unit)
     setFormCost(ingredient.cost_per_unit.toString())
-    setFormCategory(ingredient.category || 'אחר')
+    setFormCategory(normalizeCategory(ingredient.category))
     setIsModalOpen(true)
   }
 
@@ -107,6 +103,7 @@ export default function IngredientsPage() {
     setFormSubmitting(true)
     setError(null)
 
+    const category = normalizeCategory(formCategory)
     const cost = parseFloat(formCost)
     if (isNaN(cost) || cost < 0) {
       setError('עלות חייבת להיות מספר חיובי')
@@ -118,13 +115,13 @@ export default function IngredientsPage() {
       if (modalMode === 'create') {
         const { error: insertError } = await supabase
           .from('ingredients')
-          .insert([{ name: formName, unit: formUnit, cost_per_unit: cost, category: formCategory }])
+          .insert([{ name: formName, unit: formUnit, cost_per_unit: cost, category }])
 
         if (insertError) throw insertError
       } else if (modalMode === 'edit' && selectedIngredient) {
         const { error: updateError } = await supabase
           .from('ingredients')
-          .update({ name: formName, unit: formUnit, cost_per_unit: cost, category: formCategory })
+          .update({ name: formName, unit: formUnit, cost_per_unit: cost, category })
           .eq('id', selectedIngredient.id)
 
         if (updateError) throw updateError
@@ -180,9 +177,9 @@ export default function IngredientsPage() {
     }
   }
 
-  const otherIngredients = filteredIngredients.filter(
-    (ing) => !ing.category || !INGREDIENT_CATEGORIES.includes(ing.category)
-  )
+  // Whatever categories the ingredients actually use — a new one shows up here
+  // on its own, without any code change.
+  const categories = collectCategories(filteredIngredients, DEFAULT_INGREDIENT_CATEGORIES)
 
   return (
     <div className="space-y-8" dir="rtl">
@@ -240,8 +237,8 @@ export default function IngredientsPage() {
         </div>
       ) : (
         <div className="space-y-12">
-          {INGREDIENT_CATEGORIES.map((category) => {
-            const categoryIngredients = filteredIngredients.filter((ing) => ing.category === category)
+          {categories.map((category) => {
+            const categoryIngredients = inCategory(filteredIngredients, category)
             if (categoryIngredients.length === 0) return null
 
             return (
@@ -300,60 +297,6 @@ export default function IngredientsPage() {
             )
           })}
 
-          {otherIngredients.length > 0 && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 border-r-4 border-zinc-700 pr-3 text-right justify-start">
-                <h2 className="text-xl font-black text-white">אחר</h2>
-                <span className="text-xxs font-bold text-zinc-500 bg-zinc-950 px-2.5 py-0.5 rounded-full border border-zinc-900">
-                  {otherIngredients.length} רכיבים
-                </span>
-              </div>
-
-              <div className="bg-zinc-950 border border-zinc-900 rounded-2xl overflow-hidden shadow-xl text-right">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-right border-collapse">
-                    <thead>
-                      <tr className="border-b border-zinc-900 bg-zinc-950/40 text-zinc-400 text-xs font-bold uppercase tracking-wider">
-                        <th className="py-4.5 px-6">שם חומר הגלם</th>
-                        <th className="py-4.5 px-6">יחידת מידה</th>
-                        <th className="py-4.5 px-6">עלות ליחידה</th>
-                        <th className="py-4.5 px-6 text-left">פעולות</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-900 text-zinc-300 text-sm">
-                      {otherIngredients.map((ing) => (
-                        <tr key={ing.id} className="hover:bg-zinc-900/30 transition-colors">
-                          <td className="py-4 px-6 font-bold text-zinc-100">{ing.name}</td>
-                          <td className="py-4 px-6">
-                            <span className="inline-block px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300">
-                              {getUnitLabel(ing.unit)}
-                            </span>
-                          </td>
-                          <td className="py-4 px-6 font-bold text-amber-500 font-mono">
-                            ₪{Number(ing.cost_per_unit).toFixed(2)} <span className="text-xs text-zinc-500 font-medium">/ {getUnitLabel(ing.unit)}</span>
-                          </td>
-                          <td className="py-4 px-6 text-left space-x-2 space-x-reverse">
-                            <button
-                              onClick={() => handleOpenEdit(ing)}
-                              className="inline-flex p-2 bg-zinc-900 hover:bg-amber-500/10 text-zinc-400 hover:text-amber-400 rounded-lg transition-all cursor-pointer"
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(ing.id)}
-                              className="inline-flex p-2 bg-zinc-900 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 rounded-lg transition-all cursor-pointer"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -400,9 +343,15 @@ export default function IngredientsPage() {
                     קטגוריה
                   </label>
                   <CustomSelect
-                    options={INGREDIENT_CATEGORIES.map((cat) => ({ value: cat, label: cat }))}
+                    options={collectCategories(ingredients, DEFAULT_INGREDIENT_CATEGORIES, {
+                      includeDefaults: true,
+                    }).map((cat) => ({ value: cat, label: cat }))}
                     value={formCategory}
                     onChange={setFormCategory}
+                    disabled={formSubmitting}
+                    creatable
+                    createLabel={(query) => `צור קטגוריה "${query}"`}
+                    searchPlaceholder="חפש או הקלד קטגוריה חדשה..."
                     placeholder="בחר קטגוריה..."
                   />
                 </div>

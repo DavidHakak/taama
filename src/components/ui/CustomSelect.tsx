@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useMemo } from 'react'
-import { ChevronDown, Search, X } from 'lucide-react'
+import { ChevronDown, Plus, Search, X } from 'lucide-react'
 import { AnchoredDropdown } from '@/components/ui/AnchoredDropdown'
 
 export interface SelectOption {
@@ -22,6 +22,9 @@ interface CustomSelectProps {
   disabled?: boolean
   className?: string
   categoriesOrder?: string[]
+  /** Let the user commit the search text itself as a brand new value. */
+  creatable?: boolean
+  createLabel?: (query: string) => string
 }
 
 export function CustomSelect({
@@ -35,6 +38,8 @@ export function CustomSelect({
   disabled = false,
   className = '',
   categoriesOrder,
+  creatable = false,
+  createLabel = (query) => `צור "${query}"`,
 }: CustomSelectProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -44,6 +49,10 @@ export function CustomSelect({
   const selectedOption = useMemo(() => {
     return options.find((o) => o.value === value)
   }, [options, value])
+
+  // A creatable select can hold a value that isn't in the list yet, so fall back
+  // to showing the raw value rather than the placeholder.
+  const displayLabel = selectedOption?.label ?? value
 
   // Filter options based on search query
   const filteredOptions = useMemo(() => {
@@ -85,6 +94,15 @@ export function CustomSelect({
     return { groups, keys: sortedGroupKeys }
   }, [filteredOptions, groupByCategory, categoriesOrder])
 
+  // The search text, when it's a value that doesn't exist yet
+  const newValue = useMemo(() => {
+    if (!creatable) return null
+    const query = search.trim()
+    if (!query) return null
+    const exists = options.some((o) => o.value.toLowerCase() === query.toLowerCase())
+    return exists ? null : query
+  }, [creatable, search, options])
+
   const closeDropdown = () => {
     setIsOpen(false)
     setSearch('')
@@ -107,8 +125,8 @@ export function CustomSelect({
           disabled ? 'opacity-50 cursor-not-allowed' : ''
         }`}
       >
-        <span className={selectedOption ? 'text-zinc-100 font-bold' : 'text-zinc-550 font-medium text-zinc-500'}>
-          {selectedOption ? selectedOption.label : placeholder}
+        <span className={displayLabel ? 'text-zinc-100 font-bold' : 'text-zinc-550 font-medium text-zinc-500'}>
+          {displayLabel || placeholder}
         </span>
         <ChevronDown className={`h-4 w-4 text-zinc-450 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
@@ -141,8 +159,20 @@ export function CustomSelect({
 
         {/* Options list */}
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-0.5 pr-1">
+          {newValue && (
+            <button
+              type="button"
+              onClick={() => handleSelect(newValue)}
+              className="w-full text-right px-3 py-2 mb-0.5 text-xs rounded-lg transition-all cursor-pointer flex items-center gap-1.5 text-amber-400 hover:bg-amber-500/10 font-bold"
+            >
+              <Plus className="h-3.5 w-3.5 shrink-0" />
+              <span>{createLabel(newValue)}</span>
+            </button>
+          )}
           {filteredOptions.length === 0 ? (
-            <p className="text-xxs text-zinc-600 py-4 text-center font-medium">לא נמצאו תוצאות</p>
+            newValue ? null : (
+              <p className="text-xxs text-zinc-600 py-4 text-center font-medium">לא נמצאו תוצאות</p>
+            )
           ) : groupByCategory && groupedOptions ? (
             // Grouped Options render
             groupedOptions.keys.map((catKey) => {

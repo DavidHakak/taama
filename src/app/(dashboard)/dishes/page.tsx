@@ -17,6 +17,12 @@ import {
   Search,
 } from 'lucide-react'
 import { CustomSelect } from '@/components/ui/CustomSelect'
+import {
+  DEFAULT_DISH_CATEGORIES,
+  DEFAULT_INGREDIENT_CATEGORIES,
+  collectCategories,
+  inCategory,
+} from '@/utils/categories'
 import { AnchoredDropdown } from '@/components/ui/AnchoredDropdown'
 import { useCustomDialogs } from '@/hooks/useCustomDialogs'
 
@@ -27,16 +33,6 @@ interface Ingredient {
   cost_per_unit: number
   category?: string
 }
-
-const INGREDIENT_CATEGORIES = [
-  "ירקות ופירות",
-  "בשרים ודגים",
-  "תבלינים",
-  "מוצרים יבשים/מזווה",
-  "מוצרי חלב",
-  "קפואים",
-  "אחר"
-]
 
 interface DishIngredient {
   id?: string
@@ -57,7 +53,6 @@ interface TempLineItem {
   quantity: string // string for input binding
 }
 
-const CATEGORIES = ["סלטים", "ראשונות", "עיקריות", "תוספות", "קינוחים"]
 
 export default function DishesPage() {
   const supabase = createClient()
@@ -229,7 +224,7 @@ export default function DishesPage() {
       if (modalMode === 'create') {
         const { data, error: insertError } = await supabase
           .from('dishes')
-          .insert([{ name: dishName, category: dishCategory }])
+          .insert([{ name: dishName, category: dishCategory.trim() }])
           .select()
           .single()
 
@@ -238,7 +233,7 @@ export default function DishesPage() {
       } else if (modalMode === 'edit' && dishId) {
         const { error: updateError } = await supabase
           .from('dishes')
-          .update({ name: dishName, category: dishCategory })
+          .update({ name: dishName, category: dishCategory.trim() })
           .eq('id', dishId)
 
         if (updateError) throw updateError
@@ -323,8 +318,8 @@ export default function DishesPage() {
     return dish.dish_ingredients?.some((di) => isMatchingIngredient(di.ingredients?.name)) ?? false
   })
 
-  // Grouping dishes by category
-  const otherDishes = filteredDishes.filter((d) => !d.category || !CATEGORIES.includes(d.category))
+  // Grouping dishes by whatever categories the dishes themselves use
+  const dishCategories = collectCategories(filteredDishes, DEFAULT_DISH_CATEGORIES)
 
   return (
     <div className="space-y-8" dir="rtl">
@@ -381,9 +376,8 @@ export default function DishesPage() {
         </div>
       ) : (
         <div className="space-y-12">
-          {/* Loop over fixed categories */}
-          {CATEGORIES.map((category) => {
-            const categoryDishes = filteredDishes.filter((d) => d.category === category)
+          {dishCategories.map((category) => {
+            const categoryDishes = inCategory(filteredDishes, category)
             if (categoryDishes.length === 0) return null
 
             return (
@@ -460,79 +454,6 @@ export default function DishesPage() {
             )
           })}
 
-          {/* Rendering custom or uncategorized dishes */}
-          {otherDishes.length > 0 && (
-            <div className="space-y-5">
-              <div className="flex items-center gap-3 border-r-4 border-zinc-700 pr-3">
-                <h2 className="text-xl font-black text-white">מנות אחרות</h2>
-                <span className="text-xxs font-bold text-zinc-400 bg-zinc-950 px-2.5 py-0.5 rounded-full border border-zinc-900">
-                  {otherDishes.length} מנות
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {otherDishes.map((dish) => {
-                  const cost = calculateDishCost(dish)
-                  const ingredientCount = dish.dish_ingredients?.length || 0
-                  return (
-                    <div
-                      key={dish.id}
-                      className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 shadow-xl hover:border-zinc-800 transition-all flex flex-col justify-between"
-                    >
-                      <div>
-                        <div className="flex items-start justify-between gap-4 mb-3">
-                          <h3 className="text-lg font-bold text-white leading-tight truncate">{dish.name}</h3>
-                          <span className="shrink-0 inline-flex items-center px-2 py-0.5 bg-zinc-900 border border-zinc-850 border-zinc-800 rounded-lg text-xxs font-extrabold text-zinc-400">
-                            {ingredientCount} רכיבים
-                          </span>
-                        </div>
-
-                        {/* Summary of ingredients */}
-                        <div className="text-xs text-zinc-400 space-y-1 mt-4 border-t border-b border-zinc-900/50 py-3 mb-4 max-h-36 overflow-y-auto">
-                          {dish.dish_ingredients?.map((di) => {
-                            const matched = isMatchingIngredient(di.ingredients?.name)
-                            return (
-                              <div
-                                key={di.id}
-                                className={`flex justify-between ${matched ? 'text-amber-400 font-bold' : ''}`}
-                              >
-                                <span className="truncate">{di.ingredients?.name}</span>
-                                <span className={`shrink-0 font-mono pl-2 ${matched ? 'text-amber-400' : 'text-zinc-400'}`}>
-                                  {di.quantity} {getUnitLabel(di.ingredients?.unit || '')}
-                                </span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between mt-auto pt-2">
-                        <div>
-                          <span className="block text-xxs text-zinc-400 font-semibold uppercase">עלות מנה מוערכת</span>
-                          <span className="text-lg font-black text-amber-500">₪{cost.toFixed(2)}</span>
-                        </div>
-
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleOpenEdit(dish)}
-                            className="p-2 bg-zinc-900 hover:bg-amber-500/10 text-zinc-400 hover:text-amber-400 rounded-lg transition-all cursor-pointer"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteDish(dish.id)}
-                            className="p-2 bg-zinc-900 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 rounded-lg transition-all cursor-pointer"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -577,7 +498,13 @@ export default function DishesPage() {
                     קטגוריה
                   </label>
                   <CustomSelect
-                    options={CATEGORIES.map((cat) => ({ value: cat, label: cat }))}
+                    options={collectCategories(dishes, DEFAULT_DISH_CATEGORIES, {
+                      includeDefaults: true,
+                    }).map((cat) => ({ value: cat, label: cat }))}
+                    creatable
+                    createLabel={(query) => `צור קטגוריה "${query}"`}
+                    searchPlaceholder="חפש או הקלד קטגוריה חדשה..."
+
                     value={dishCategory}
                     onChange={setDishCategory}
                     placeholder="בחר קטגוריה..."
@@ -614,14 +541,12 @@ export default function DishesPage() {
                       i.name.toLowerCase().includes(ingredientSearch.toLowerCase())
                     )
 
-                    // Known categories first, then any other category coming from the DB,
-                    // so an ingredient is never silently dropped from the list
-                    const optionCategories = [
-                      ...INGREDIENT_CATEGORIES,
-                      ...Array.from(
-                        new Set(filteredOptions.map((i) => i.category || 'אחר'))
-                      ).filter((cat) => !INGREDIENT_CATEGORIES.includes(cat)),
-                    ]
+                    // Grouped by whatever categories the ingredients actually use,
+                    // so none is ever silently dropped from the list
+                    const optionCategories = collectCategories(
+                      filteredOptions,
+                      DEFAULT_INGREDIENT_CATEGORIES
+                    )
 
                     return (
                       <div
@@ -672,7 +597,7 @@ export default function DishesPage() {
                                   ) : (
                                     <>
                                       {optionCategories.map((cat) => {
-                                        const catIngs = filteredOptions.filter(i => (i.category || 'אחר') === cat)
+                                        const catIngs = inCategory(filteredOptions, cat)
                                         if (catIngs.length === 0) return null
                                         return (
                                           <div key={cat} className="space-y-1">

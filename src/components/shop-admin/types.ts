@@ -126,16 +126,6 @@ export const DEFAULT_SIZE_TYPES = [
   '500ml קופסה'
 ]
 
-export const INGREDIENT_CATEGORIES = [
-  "ירקות ופירות",
-  "בשרים ודגים",
-  "תבלינים",
-  "מוצרים יבשים/מזווה",
-  "מוצרי חלב",
-  "קפואים",
-  "אחר"
-]
-
 export const getUnitLabel = (unit?: string) => {
   if (!unit) return ''
   switch (unit) {

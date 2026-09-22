@@ -28,6 +28,7 @@ import {
 import Link from 'next/link'
 import { CustomSelect } from '@/components/ui/CustomSelect'
 import { AnchoredDropdown } from '@/components/ui/AnchoredDropdown'
+import { DEFAULT_DISH_CATEGORIES, collectCategories, inCategory } from '@/utils/categories'
 
 interface Dish {
   id: string
@@ -76,13 +77,14 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
   const [selectedDishes, setSelectedDishes] = useState<SelectedDishItem[]>([])
   const [saving, setSaving] = useState(false)
 
-  // מצב פתיחה/כיווץ של מקטעי העמוד (כדי לקצר עמוד ארוך)
+  // מצב פתיחה/כיווץ של מקטעי העמוד (כדי לקצר עמוד ארוך).
+  // באירוע חדש הכול מתחיל מכווץ, כדי שהמשתמש יבחר במה לפתוח ולא יקבל עמוד מלא.
   const [openSections, setOpenSections] = useState({
-    prep: true,
-    details: true,
-    pricing: !orderId, // בהזמנה חדשה פתוח לתמחור, בעריכה קיימת מכווץ כברירת מחדל
-    dishes: true,
-    shopping: true,
+    prep: !!orderId,
+    details: !!orderId,
+    pricing: false,
+    dishes: !!orderId,
+    shopping: !!orderId,
   })
   const toggleSection = (key: keyof typeof openSections) =>
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }))
@@ -1356,29 +1358,42 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                                   if (filteredOptions.length === 0) {
                                     return <p className="text-xxs text-zinc-600 py-3.5 text-center">לא נמצאו מנות</p>
                                   }
-                                  return filteredOptions.map((d) => {
-                                    const isSelected = d.id === item.dishId
-                                    const cost = d.dish_ingredients?.reduce((sum, di) => {
-                                      return sum + Number(di.ingredients?.cost_per_unit || 0) * Number(di.quantity || 0)
-                                    }, 0) || 0
+                                  // מקובץ לפי הקטגוריות שהמנות עצמן משתמשות בהן, כדי שקטגוריה
+                                  // חדשה תופיע כאן מעצמה בלי שינוי קוד
+                                  return collectCategories(filteredOptions, DEFAULT_DISH_CATEGORIES).map((cat) => {
+                                    const catDishes = inCategory(filteredOptions, cat)
+                                    if (catDishes.length === 0) return null
                                     return (
-                                      <button
-                                        key={d.id}
-                                        type="button"
-                                        onClick={() => {
-                                          updateDishRow(idx, 'dishId', d.id)
-                                          setActiveDropdown(null)
-                                        }}
-                                        className={`w-full text-right px-3 py-2 text-xs rounded-lg transition-colors cursor-pointer flex justify-between items-center ${isSelected
-                                            ? 'bg-amber-500/10 text-amber-400 font-black'
-                                            : 'text-zinc-300 hover:bg-zinc-900/60'
-                                          }`}
-                                      >
-                                        <span>{d.name}</span>
-                                        <span className="text-xxs text-zinc-400 shrink-0 font-mono">
-                                          ₪{cost.toFixed(2)}
+                                      <div key={cat} className="space-y-0.5 mt-1.5 first:mt-0">
+                                        <span className="block text-[10px] font-black text-amber-500/80 px-2 py-0.5 bg-zinc-900/40 rounded border border-zinc-900/30">
+                                          {cat}
                                         </span>
-                                      </button>
+                                        {catDishes.map((d) => {
+                                          const isSelected = d.id === item.dishId
+                                          const cost = d.dish_ingredients?.reduce((sum, di) => {
+                                            return sum + Number(di.ingredients?.cost_per_unit || 0) * Number(di.quantity || 0)
+                                          }, 0) || 0
+                                          return (
+                                            <button
+                                              key={d.id}
+                                              type="button"
+                                              onClick={() => {
+                                                updateDishRow(idx, 'dishId', d.id)
+                                                setActiveDropdown(null)
+                                              }}
+                                              className={`w-full text-right px-3 py-2 text-xs rounded-lg transition-colors cursor-pointer flex justify-between items-center ${isSelected
+                                                  ? 'bg-amber-500/10 text-amber-400 font-black'
+                                                  : 'text-zinc-300 hover:bg-zinc-900/60'
+                                                }`}
+                                            >
+                                              <span>{d.name}</span>
+                                              <span className="text-xxs text-zinc-400 shrink-0 font-mono">
+                                                ₪{cost.toFixed(2)}
+                                              </span>
+                                            </button>
+                                          )
+                                        })}
+                                      </div>
                                     )
                                   })
                                 })()}

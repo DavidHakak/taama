@@ -5,7 +5,8 @@ import { Tag, X, Trash2, PlusCircle, MinusCircle, Loader2 } from 'lucide-react'
 import { CustomSelect } from '@/components/ui/CustomSelect'
 import { createShopProduct, updateShopProduct } from '@/app/(dashboard)/shop-admin/actions'
 import { useRouter } from 'next/navigation'
-import { Ingredient, Product, ProductIngredient, CATEGORIES, INGREDIENT_CATEGORIES, getUnitLabel } from './types'
+import { Ingredient, Product, ProductIngredient, CATEGORIES, getUnitLabel } from './types'
+import { DEFAULT_INGREDIENT_CATEGORIES, collectCategories, normalizeCategory } from '@/utils/categories'
 import { useAdminPage } from './AdminPageClient'
 
 interface ProductModalProps {
@@ -467,12 +468,12 @@ export default function ProductModal({
                     options={ingredientsList.map((ing) => ({
                       value: ing.id,
                       label: `${ing.name} (${getUnitLabel(ing.unit)})`,
-                      category: ing.category || 'אחר',
+                      category: normalizeCategory(ing.category),
                     }))}
                     value={selectedTempIngId}
                     onChange={setSelectedTempIngId}
                     groupByCategory={true}
-                    categoriesOrder={INGREDIENT_CATEGORIES}
+                    categoriesOrder={collectCategories(ingredientsList, DEFAULT_INGREDIENT_CATEGORIES)}
                     placeholder="בחר חומר גלם..."
                   />
                 </div>
