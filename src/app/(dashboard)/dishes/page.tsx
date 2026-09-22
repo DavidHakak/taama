@@ -34,6 +34,7 @@ const INGREDIENT_CATEGORIES = [
   "תבלינים",
   "מוצרים יבשים/מזווה",
   "מוצרי חלב",
+  "קפואים",
   "אחר"
 ]
 
@@ -613,6 +614,15 @@ export default function DishesPage() {
                       i.name.toLowerCase().includes(ingredientSearch.toLowerCase())
                     )
 
+                    // Known categories first, then any other category coming from the DB,
+                    // so an ingredient is never silently dropped from the list
+                    const optionCategories = [
+                      ...INGREDIENT_CATEGORIES,
+                      ...Array.from(
+                        new Set(filteredOptions.map((i) => i.category || 'אחר'))
+                      ).filter((cat) => !INGREDIENT_CATEGORIES.includes(cat)),
+                    ]
+
                     return (
                       <div
                         key={idx}
@@ -661,7 +671,7 @@ export default function DishesPage() {
                                     <p className="text-xxs text-zinc-600 py-3.5 text-center">לא נמצאו חומרי גלם</p>
                                   ) : (
                                     <>
-                                      {INGREDIENT_CATEGORIES.map((cat) => {
+                                      {optionCategories.map((cat) => {
                                         const catIngs = filteredOptions.filter(i => (i.category || 'אחר') === cat)
                                         if (catIngs.length === 0) return null
                                         return (
