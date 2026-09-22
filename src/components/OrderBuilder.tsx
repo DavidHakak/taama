@@ -78,13 +78,14 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
   const [saving, setSaving] = useState(false)
 
   // מצב פתיחה/כיווץ של מקטעי העמוד (כדי לקצר עמוד ארוך).
-  // באירוע חדש הכול מתחיל מכווץ, כדי שהמשתמש יבחר במה לפתוח ולא יקבל עמוד מלא.
+  // הכול מתחיל מכווץ, גם באירוע חדש וגם בעריכת אירוע קיים, כדי שהמשתמש
+  // יבחר במה לפתוח ולא יקבל עמוד מלא.
   const [openSections, setOpenSections] = useState({
-    prep: !!orderId,
-    details: !!orderId,
+    prep: false,
+    details: false,
     pricing: false,
-    dishes: !!orderId,
-    shopping: !!orderId,
+    dishes: false,
+    shopping: false,
   })
   const toggleSection = (key: keyof typeof openSections) =>
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }))
