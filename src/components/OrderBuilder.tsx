@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
-import { aggregateOrderIngredients } from '@/utils/costing'
+import { aggregateOrderIngredients, type AggregatedIngredient } from '@/utils/costing'
 import {
   ClipboardList,
   Calendar,
@@ -17,6 +17,7 @@ import {
   Beef,
   PlusCircle,
   ChevronRight,
+  ChevronLeft,
   ChevronDown,
   ChevronUp,
   ChefHat,
@@ -62,6 +63,9 @@ const PAYMENT_TASK_CATEGORY = 'קייטרינג'
 
 export default function OrderBuilder({ orderId }: OrderBuilderProps) {
   const router = useRouter()
+  // Shopping list: the item whose dishes popup is open, and the dish being opened from it
+  const [usageItem, setUsageItem] = useState<AggregatedIngredient | null>(null)
+  const [openingDishId, setOpeningDishId] = useState<string | null>(null)
   const supabase = createClient()
 
   const [loading, setLoading] = useState(true)
@@ -1592,31 +1596,52 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                             </>
                           )
 
-                          if (!canTrackPurchases) {
-                            return (
-                              <div
-                                key={item.ingredientId}
-                                className="p-3 bg-zinc-900/20 border border-zinc-900/80 rounded-xl flex items-center gap-3 text-right"
-                              >
-                                {row}
-                              </div>
-                            )
-                          }
+                          const dishNames = item.dishes
+                            .map((d) => `${d.dishName} ${Number(d.quantity.toFixed(2))} ${getUnitLabel(item.unit)}`)
+                            .join(' · ')
+                          const dishesButton = (
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() => setUsageItem(item)}
+                              className="max-w-full inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/40 border border-zinc-900 hover:border-amber-500/30 hover:bg-amber-500/5 text-zinc-400 hover:text-amber-300 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                              <ChefHat className="h-3 w-3 text-amber-500/80 shrink-0" />
+                              <span className="text-[10px] font-semibold truncate">
+                                {dishNames || item.autoNote || 'לא משויך למנה'}
+                              </span>
+                              {item.dishes.length > 0 && (
+                                <span className="text-[9px] font-black text-amber-500 bg-amber-500/10 px-1.5 rounded-full shrink-0">
+                                  {item.dishes.length}
+                                </span>
+                              )}
+                              <ChevronLeft className="h-3 w-3 shrink-0" />
+                            </button>
+                          )
 
                           return (
-                            <button
+                            <div
                               key={item.ingredientId}
-                              type="button"
-                              disabled={saving || purchaseSavingId !== null}
-                              onClick={() => togglePurchased(item.ingredientId, !isPurchased)}
-                              className={`w-full p-3 rounded-xl border flex items-center gap-3 text-right transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
-                                isPurchased
-                                  ? 'bg-emerald-500/5 border-emerald-500/20 hover:bg-emerald-500/10'
-                                  : 'bg-zinc-900/20 border-zinc-900/80 hover:bg-zinc-900/35 hover:border-zinc-800/80'
+                              className={`rounded-xl border transition-all ${
+                                canTrackPurchases && isPurchased
+                                  ? 'bg-emerald-500/5 border-emerald-500/20'
+                                  : 'bg-zinc-900/20 border-zinc-900/80 hover:border-zinc-800/80'
                               }`}
                             >
-                              {row}
-                            </button>
+                              {canTrackPurchases ? (
+                                <button
+                                  type="button"
+                                  disabled={saving || purchaseSavingId !== null}
+                                  onClick={() => togglePurchased(item.ingredientId, !isPurchased)}
+                                  className="w-full p-3 pb-2 flex items-center gap-3 text-right cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                                >
+                                  {row}
+                                </button>
+                              ) : (
+                                <div className="p-3 pb-2 flex items-center gap-3 text-right">{row}</div>
+                              )}
+                              <div className={`pb-3 pl-3 flex ${canTrackPurchases ? 'pr-11' : 'pr-3'}`}>{dishesButton}</div>
+                            </div>
                           )
                             })}
                           </div>
@@ -1892,6 +1917,82 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* פופאפ: לאילו מנות באירוע שייך חומר הגלם */}
+      {usageItem && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs"
+          dir="rtl"
+          onClick={() => !openingDishId && setUsageItem(null)}
+        >
+          <div
+            className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[80vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 px-6 py-4 border-b border-zinc-900">
+              <div className="min-w-0 text-right">
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <ChefHat className="h-5 w-5 text-amber-500 shrink-0" />
+                  <span className="truncate">{usageItem.ingredientName}</span>
+                </h3>
+                <p className="text-xxs text-zinc-400 mt-1">
+                  סה״כ {usageItem.totalQuantity.toFixed(2)} {getUnitLabel(usageItem.unit)} ·{' '}
+                  {usageItem.dishes.length > 0 ? `משויך ל-${usageItem.dishes.length} מנות` : 'לא משויך למנה'}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={!!openingDishId}
+                onClick={() => setUsageItem(null)}
+                className="p-1.5 rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-900 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-2 overflow-y-auto">
+              {usageItem.autoNote && (
+                <p className="text-xxs font-semibold text-zinc-400 bg-zinc-900/40 border border-zinc-900 rounded-xl px-3 py-2.5">
+                  {usageItem.autoNote}
+                </p>
+              )}
+              {usageItem.dishes.map((d) => (
+                <button
+                  key={d.dishId}
+                  type="button"
+                  disabled={!!openingDishId}
+                  onClick={() => {
+                    setOpeningDishId(d.dishId)
+                    router.push(`/dishes?edit=${encodeURIComponent(d.dishId)}`)
+                  }}
+                  className="w-full p-3 rounded-xl border border-zinc-900 bg-zinc-900/20 hover:bg-amber-500/5 hover:border-amber-500/30 flex items-center gap-3 text-right transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed group"
+                >
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-xs font-bold text-zinc-200 group-hover:text-amber-300 truncate">
+                      {d.dishName}
+                    </span>
+                    <span className="text-[10px] font-semibold text-zinc-500">{d.dishCategory}</span>
+                  </div>
+                  <span className="text-xs font-bold font-mono text-zinc-300 shrink-0">
+                    {d.quantity.toFixed(2)} {getUnitLabel(usageItem.unit)}
+                  </span>
+                  {openingDishId === d.dishId ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-amber-500 shrink-0" />
+                  ) : (
+                    <ChevronLeft className="h-4 w-4 text-zinc-600 group-hover:text-amber-500 shrink-0" />
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {usageItem.dishes.length > 0 && (
+              <p className="px-6 py-3 border-t border-zinc-900 text-[10px] text-zinc-500 text-right">
+                לחיצה על מנה פותחת את המתכון שלה
+              </p>
+            )}
           </div>
         </div>
       )}

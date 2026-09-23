@@ -81,6 +81,23 @@ export default function DishesPage() {
   const ingredientTriggerRef = useRef<HTMLButtonElement | null>(null)
   const [ingredientSearch, setIngredientSearch] = useState('')
 
+  // Open Builder for Edit
+  const handleOpenEdit = (dish: Dish) => {
+    setModalMode('edit')
+    setSelectedDish(dish)
+    setDishName(dish.name)
+    setDishCategory(dish.category || '')
+    setActiveDropdown(null)
+    
+    const initialLines = dish.dish_ingredients.map((di) => ({
+      ingredientId: di.ingredient_id,
+      quantity: di.quantity.toString(),
+    }))
+    
+    setLineItems(initialLines.length > 0 ? initialLines : [{ ingredientId: '', quantity: '1' }])
+    setIsModalOpen(true)
+  }
+
   // Fetch Dishes and Ingredients
   const fetchData = async () => {
     try {
@@ -119,6 +136,18 @@ export default function DishesPage() {
 
       setDishes(dishesData as unknown as Dish[] || [])
       setAllIngredients(ingredientsData || [])
+
+      // Deep link from other screens (e.g. the event shopping list): /dishes?edit=<dishId>
+      // opens that dish's recipe once the data has loaded.
+      const params = new URLSearchParams(window.location.search)
+      const editId = params.get('edit')
+      if (editId) {
+        const dish = (dishesData as unknown as Dish[] | null)?.find((d) => d.id === editId)
+        if (dish) handleOpenEdit(dish)
+        params.delete('edit')
+        const query = params.toString()
+        window.history.replaceState(null, '', window.location.pathname + (query ? `?${query}` : ''))
+      }
     } catch (err: unknown) {
       console.error('Error fetching dishes data:', err)
       setError(err instanceof Error ? err.message : 'שגיאה בטעינת המנות')
@@ -159,23 +188,6 @@ export default function DishesPage() {
     setDishCategory('')
     setLineItems([{ ingredientId: '', quantity: '1' }])
     setActiveDropdown(null)
-    setIsModalOpen(true)
-  }
-
-  // Open Builder for Edit
-  const handleOpenEdit = (dish: Dish) => {
-    setModalMode('edit')
-    setSelectedDish(dish)
-    setDishName(dish.name)
-    setDishCategory(dish.category || '')
-    setActiveDropdown(null)
-    
-    const initialLines = dish.dish_ingredients.map((di) => ({
-      ingredientId: di.ingredient_id,
-      quantity: di.quantity.toString(),
-    }))
-    
-    setLineItems(initialLines.length > 0 ? initialLines : [{ ingredientId: '', quantity: '1' }])
     setIsModalOpen(true)
   }
 

@@ -1,5 +1,13 @@
 import { normalizeCategory } from '@/utils/categories'
 
+/** A dish in the order that uses the ingredient, and how much of it that dish needs. */
+export interface IngredientDishUsage {
+  dishId: string
+  dishName: string
+  dishCategory: string
+  quantity: number
+}
+
 export interface AggregatedIngredient {
   ingredientId: string
   ingredientName: string
@@ -7,6 +15,9 @@ export interface AggregatedIngredient {
   unit: string
   category: string
   totalCost: number
+  dishes: IngredientDishUsage[]
+  /** Set on items the app adds by itself (rolls, boxes, trays) rather than from a recipe. */
+  autoNote?: string
 }
 
 export interface AggregationResult {
@@ -21,6 +32,20 @@ export function aggregateOrderIngredients(
 ): AggregationResult {
   const map: { [id: string]: AggregatedIngredient } = {}
   let grandTotal = 0
+
+  const addDishUsage = (
+    item: AggregatedIngredient,
+    dish: { id?: string; name: string; category?: string | null },
+    quantity: number
+  ) => {
+    const dishId = dish.id || dish.name
+    const existing = item.dishes.find((d) => d.dishId === dishId)
+    if (existing) {
+      existing.quantity += quantity
+    } else {
+      item.dishes.push({ dishId, dishName: dish.name, dishCategory: normalizeCategory(dish.category), quantity })
+    }
+  }
 
   // Count starters and mains to divide portions with 13% surcharge
   let startersCount = 0
@@ -63,11 +88,13 @@ export function aggregateOrderIngredients(
           unit,
           category: normalizeCategory(ing.category),
           totalCost: 0,
+          dishes: [],
         }
       }
 
       map[ingId].totalQuantity += totalQty
       map[ingId].totalCost += totalCost
+      addDishUsage(map[ingId], dish, totalQty)
       grandTotal += totalCost
     })
   })
@@ -95,8 +122,10 @@ export function aggregateOrderIngredients(
         unit: rollsIng.unit,
         category: normalizeCategory(rollsIng.category),
         totalCost: 0,
+        dishes: [],
       }
     }
+    map[ingId].autoNote = 'מחושב אוטומטית לפי מספר הסועדים'
     map[ingId].totalQuantity += rollsQty
     map[ingId].totalCost += rollsCost
     grandTotal += rollsCost
@@ -130,8 +159,13 @@ export function aggregateOrderIngredients(
         unit: saladBoxIng.unit,
         category: normalizeCategory(saladBoxIng.category),
         totalCost: 0,
+        dishes: [],
       }
     }
+    map[ingId].autoNote = 'מחושב אוטומטית: קופסה לכל 50 סועדים בכל סלט'
+    orderDishes.forEach((od) => {
+      if (od.dishes?.category === 'סלטים') addDishUsage(map[ingId], od.dishes, boxesPerDish)
+    })
     map[ingId].totalQuantity += totalBoxes
     map[ingId].totalCost += boxesCost
     grandTotal += boxesCost
@@ -152,8 +186,15 @@ export function aggregateOrderIngredients(
         unit: trayIng.unit,
         category: normalizeCategory(trayIng.category),
         totalCost: 0,
+        dishes: [],
       }
     }
+    map[ingId].autoNote = 'מחושב אוטומטית: מגש לכל 50 סועדים בכל מנה חמה/קינוח'
+    orderDishes.forEach((od) => {
+      if (['ראשונות', 'תוספות', 'עיקריות', 'קינוחים'].includes(od.dishes?.category)) {
+        addDishUsage(map[ingId], od.dishes, traysPerDish)
+      }
+    })
     map[ingId].totalQuantity += totalTrays
     map[ingId].totalCost += traysCost
     grandTotal += traysCost
