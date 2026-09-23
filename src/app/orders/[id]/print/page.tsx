@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState, use } from 'react'
+import React, { useEffect, useState, use } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
 import { aggregateOrderIngredients } from '@/utils/costing'
+import { DEFAULT_INGREDIENT_CATEGORIES, collectCategories, inCategory } from '@/utils/categories'
 import {
   Printer,
   ChevronRight,
@@ -24,6 +25,7 @@ interface Ingredient {
   id: string
   name: string
   unit: string
+  category?: string | null
   cost_per_unit: number
 }
 
@@ -86,6 +88,7 @@ export default function PrintOrderPage({ params }: PageProps) {
                     id,
                     name,
                     unit,
+                    category,
                     cost_per_unit
                   )
                 )
@@ -101,7 +104,7 @@ export default function PrintOrderPage({ params }: PageProps) {
         // Fetch ingredients catalog
         const { data: ingredientsData, error: ingredientsError } = await supabase
           .from('ingredients')
-          .select('id, name, unit, cost_per_unit')
+          .select('id, name, unit, category, cost_per_unit')
 
         if (ingredientsError) throw ingredientsError
         setIngredientsCatalog(ingredientsData || [])
@@ -320,7 +323,14 @@ export default function PrintOrderPage({ params }: PageProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-900 text-zinc-300 print:text-black print:divide-black">
-                {aggregatedIngredients.map((item) => (
+                {collectCategories(aggregatedIngredients, DEFAULT_INGREDIENT_CATEGORIES).map((category) => (
+                  <React.Fragment key={category}>
+                    <tr className="bg-black/30 print:bg-transparent">
+                      <td colSpan={3} className="py-2 px-6 text-xs font-black text-amber-500/80 print:text-black">
+                        {category}
+                      </td>
+                    </tr>
+                    {inCategory(aggregatedIngredients, category).map((item) => (
                   <tr key={item.ingredientId} className="hover:bg-zinc-900/10">
                     <td className="py-3.5 px-6 font-bold text-zinc-100 print:text-black">{item.ingredientName}</td>
                     <td className="py-3.5 px-6 text-left font-mono font-semibold text-zinc-300 print:text-black">
@@ -330,6 +340,8 @@ export default function PrintOrderPage({ params }: PageProps) {
                       ₪{item.totalCost.toFixed(2)}
                     </td>
                   </tr>
+                    ))}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

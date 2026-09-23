@@ -28,7 +28,7 @@ import {
 import Link from 'next/link'
 import { CustomSelect } from '@/components/ui/CustomSelect'
 import { AnchoredDropdown } from '@/components/ui/AnchoredDropdown'
-import { DEFAULT_DISH_CATEGORIES, collectCategories, inCategory, normalizeCategory } from '@/utils/categories'
+import { DEFAULT_DISH_CATEGORIES, DEFAULT_INGREDIENT_CATEGORIES, collectCategories, inCategory, normalizeCategory } from '@/utils/categories'
 
 interface Dish {
   id: string
@@ -40,6 +40,7 @@ interface Dish {
       id: string
       name: string
       unit: string
+      category?: string | null
       cost_per_unit: number
     }
   }[]
@@ -163,6 +164,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                 id,
                 name,
                 unit,
+                category,
                 cost_per_unit
               )
             )
@@ -175,7 +177,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
         // Fetch ingredients catalog
         const { data: ingredientsData, error: ingredientsError } = await supabase
           .from('ingredients')
-          .select('id, name, unit, cost_per_unit')
+          .select('id, name, unit, category, cost_per_unit')
 
         if (ingredientsError) throw ingredientsError
         setIngredientsCatalog(ingredientsData || [])
@@ -1453,6 +1455,9 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
             const purchasedPct = totalCount > 0 ? Math.round((purchasedCount / totalCount) * 100) : 0
             // סימון רכש נשמר לפי מזהה אירוע, ולכן זמין רק לאחר שמירת האירוע
             const canTrackPurchases = !!orderId
+            const shoppingGroups = collectCategories(aggregatedIngredients, DEFAULT_INGREDIENT_CATEGORIES).map(
+              (category) => ({ category, items: inCategory(aggregatedIngredients, category) })
+            )
 
             return (
               <div className="bg-zinc-950 border border-zinc-900 rounded-2xl shadow-xl overflow-hidden">
@@ -1520,7 +1525,16 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                       {totalCount === 0 ? (
                         <p className="text-zinc-600 text-xs py-4 text-center">טרם נבחרו מנות.</p>
                       ) : (
-                        aggregatedIngredients.map((item) => {
+                        shoppingGroups.map((group) => (
+                          <div key={group.category} className="space-y-2">
+                            <div className="flex items-center gap-2 px-1">
+                              <span className="text-[11px] font-black text-amber-500/80">{group.category}</span>
+                              <span className="text-[10px] font-bold text-zinc-500 bg-zinc-900/60 px-2 py-0.5 rounded-full border border-zinc-900">
+                                {group.items.filter((i) => purchasedIngredients.has(i.ingredientId)).length}/{group.items.length}
+                              </span>
+                              <span className="flex-1 h-px bg-zinc-900" />
+                            </div>
+                            {group.items.map((item) => {
                           const isPurchased = purchasedIngredients.has(item.ingredientId)
                           const isSavingThis = purchaseSavingId === item.ingredientId
 
@@ -1604,7 +1618,9 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                               {row}
                             </button>
                           )
-                        })
+                            })}
+                          </div>
+                        ))
                       )}
                     </div>
                   </div>

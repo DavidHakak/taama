@@ -1,8 +1,11 @@
+import { normalizeCategory } from '@/utils/categories'
+
 export interface AggregatedIngredient {
   ingredientId: string
   ingredientName: string
   totalQuantity: number
   unit: string
+  category: string
   totalCost: number
 }
 
@@ -14,7 +17,7 @@ export interface AggregationResult {
 export function aggregateOrderIngredients(
   orderDishes: any[],
   portions: number,
-  ingredientsCatalog: { name: string; id: string; unit: string; cost_per_unit: number | string }[] = []
+  ingredientsCatalog: { name: string; id: string; unit: string; category?: string | null; cost_per_unit: number | string }[] = []
 ): AggregationResult {
   const map: { [id: string]: AggregatedIngredient } = {}
   let grandTotal = 0
@@ -58,6 +61,7 @@ export function aggregateOrderIngredients(
           ingredientName: ingName,
           totalQuantity: 0,
           unit,
+          category: normalizeCategory(ing.category),
           totalCost: 0,
         }
       }
@@ -89,6 +93,7 @@ export function aggregateOrderIngredients(
         ingredientName: rollsIng.name,
         totalQuantity: 0,
         unit: rollsIng.unit,
+        category: normalizeCategory(rollsIng.category),
         totalCost: 0,
       }
     }
@@ -123,6 +128,7 @@ export function aggregateOrderIngredients(
         ingredientName: saladBoxIng.name,
         totalQuantity: 0,
         unit: saladBoxIng.unit,
+        category: normalizeCategory(saladBoxIng.category),
         totalCost: 0,
       }
     }
@@ -144,6 +150,7 @@ export function aggregateOrderIngredients(
         ingredientName: trayIng.name,
         totalQuantity: 0,
         unit: trayIng.unit,
+        category: normalizeCategory(trayIng.category),
         totalCost: 0,
       }
     }
