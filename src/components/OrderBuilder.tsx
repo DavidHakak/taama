@@ -1596,22 +1596,19 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                             </>
                           )
 
-                          const dishNames = item.dishes
-                            .map((d) => `${d.dishName} ${Number(d.quantity.toFixed(2))} ${getUnitLabel(item.unit)}`)
-                            .join(' · ')
                           const dishesButton = (
                             <button
                               type="button"
                               disabled={saving}
                               onClick={() => setUsageItem(item)}
-                              className="max-w-full inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/40 border border-zinc-900 hover:border-amber-500/30 hover:bg-amber-500/5 text-zinc-400 hover:text-amber-300 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                              className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/40 border border-zinc-800 hover:border-zinc-600 hover:bg-zinc-900 text-zinc-400 hover:text-zinc-100 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                             >
-                              <ChefHat className="h-3 w-3 text-amber-500/80 shrink-0" />
-                              <span className="text-[10px] font-semibold truncate">
-                                {dishNames || item.autoNote || 'לא משויך למנה'}
+                              <ChefHat className="h-3 w-3 shrink-0" />
+                              <span className="text-[10px] font-semibold">
+                                {item.dishes.length > 0 ? 'פירוט מנות' : 'איך זה חושב'}
                               </span>
                               {item.dishes.length > 0 && (
-                                <span className="text-[9px] font-black text-amber-500 bg-amber-500/10 px-1.5 rounded-full shrink-0">
+                                <span className="text-[9px] font-black text-zinc-200 bg-zinc-800 px-1.5 rounded-full shrink-0">
                                   {item.dishes.length}
                                 </span>
                               )}
@@ -1935,7 +1932,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
             <div className="flex items-start justify-between gap-3 px-6 py-4 border-b border-zinc-900">
               <div className="min-w-0 text-right">
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <ChefHat className="h-5 w-5 text-amber-500 shrink-0" />
+                  <ChefHat className="h-5 w-5 text-zinc-400 shrink-0" />
                   <span className="truncate">{usageItem.ingredientName}</span>
                 </h3>
                 <p className="text-xxs text-zinc-400 mt-1">
@@ -1968,10 +1965,10 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                     setOpeningDishId(d.dishId)
                     router.push(`/dishes?edit=${encodeURIComponent(d.dishId)}`)
                   }}
-                  className="w-full p-3 rounded-xl border border-zinc-900 bg-zinc-900/20 hover:bg-amber-500/5 hover:border-amber-500/30 flex items-center gap-3 text-right transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed group"
+                  className="w-full p-3 rounded-xl border border-zinc-900 bg-zinc-900/20 hover:bg-zinc-900 hover:border-zinc-700 flex items-center gap-3 text-right transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed group"
                 >
                   <div className="min-w-0 flex-1">
-                    <span className="block text-xs font-bold text-zinc-200 group-hover:text-amber-300 truncate">
+                    <span className="block text-xs font-bold text-zinc-200 group-hover:text-white truncate">
                       {d.dishName}
                     </span>
                     <span className="text-[10px] font-semibold text-zinc-500">{d.dishCategory}</span>
@@ -1980,9 +1977,9 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                     {d.quantity.toFixed(2)} {getUnitLabel(usageItem.unit)}
                   </span>
                   {openingDishId === d.dishId ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-amber-500 shrink-0" />
+                    <Loader2 className="h-4 w-4 animate-spin text-zinc-300 shrink-0" />
                   ) : (
-                    <ChevronLeft className="h-4 w-4 text-zinc-600 group-hover:text-amber-500 shrink-0" />
+                    <ChevronLeft className="h-4 w-4 text-zinc-600 group-hover:text-zinc-200 shrink-0" />
                   )}
                 </button>
               ))}
