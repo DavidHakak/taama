@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
-import { aggregateOrderIngredients, type AggregatedIngredient } from '@/utils/costing'
+import { aggregateOrderIngredients, countSplitCourses, dishServedPortions, type AggregatedIngredient } from '@/utils/costing'
 import {
   ClipboardList,
   Calendar,
@@ -1246,15 +1246,9 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
 
             <div className="space-y-5">
               {(() => {
-                const startersCount = selectedDishes.filter((sd) => {
-                  const d = dishesList.find((dish) => dish.id === sd.dishId)
-                  return d?.category === 'ראשונות'
-                }).length
-
-                const mainsCount = selectedDishes.filter((sd) => {
-                  const d = dishesList.find((dish) => dish.id === sd.dishId)
-                  return d?.category === 'עיקריות'
-                }).length
+                const splitCounts = countSplitCourses(
+                  selectedDishes.map((sd) => dishesList.find((dish) => dish.id === sd.dishId)?.category)
+                )
 
                 // השורות מקובצות לפי קטגוריית המנה כדי שהרשימה תהיה קריאה.
                 // idx המקורי נשמר לכל שורה, כי עליו נשענים עדכון/מחיקה ופתיחת הבורר.
@@ -1287,12 +1281,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                     }, 0) || 0
                     : 0
 
-                  let rowPortions = portions || 0
-                  if (dishObj?.category === 'ראשונות' && startersCount > 0) {
-                    rowPortions = portions / startersCount
-                  } else if (dishObj?.category === 'עיקריות' && mainsCount > 0) {
-                    rowPortions = portions / mainsCount
-                  }
+                  const rowPortions = dishServedPortions(dishObj?.category, portions || 0, splitCounts)
 
                   const rowTotalCostScaled = dishCost * rowPortions
 
@@ -1400,7 +1389,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                         <span className="text-amber-500/70 text-xs ml-1">₪</span>
                         <span className="font-bold text-amber-500">{rowTotalCostScaled.toFixed(2)}</span>
                         <span className="text-zinc-400 text-xxs mr-1">
-                          ({rowPortions % 1 === 0 ? rowPortions : rowPortions.toFixed(1)} מנות)
+                          ({rowPortions} מנות)
                         </span>
                       </div>
 

@@ -3,7 +3,7 @@
 import React, { useEffect, useState, use } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
-import { aggregateOrderIngredients } from '@/utils/costing'
+import { aggregateOrderIngredients, countSplitCourses, dishServedPortions } from '@/utils/costing'
 import { DEFAULT_INGREDIENT_CATEGORIES, collectCategories, inCategory } from '@/utils/categories'
 import {
   Printer,
@@ -274,28 +274,18 @@ export default function PrintOrderPage({ params }: PageProps) {
               </thead>
               <tbody className="divide-y divide-zinc-900 text-zinc-300 print:text-black print:divide-black">
                 {(() => {
-                  const startersCount = order.order_dishes?.filter(
-                    (od) => od.dishes?.category === 'ראשונות'
-                  ).length || 0
-
-                  const mainsCount = order.order_dishes?.filter(
-                    (od) => od.dishes?.category === 'עיקריות'
-                  ).length || 0
+                  const splitCounts = countSplitCourses(
+                    (order.order_dishes || []).map((od) => od.dishes?.category)
+                  )
 
                   return order.order_dishes?.map((od, idx) => {
-                    const category = od.dishes?.category
-                    let dishPortions = order.portions || 0
-                    if (category === 'ראשונות' && startersCount > 0) {
-                      dishPortions = order.portions / startersCount
-                    } else if (category === 'עיקריות' && mainsCount > 0) {
-                      dishPortions = order.portions / mainsCount
-                    }
+                    const dishPortions = dishServedPortions(od.dishes?.category, order.portions || 0, splitCounts)
 
                     return (
                       <tr key={idx} className="hover:bg-zinc-900/10">
                         <td className="py-3.5 px-6 font-bold text-zinc-100 print:text-black">{od.dishes?.name}</td>
                         <td className="py-3.5 px-6 text-left font-mono font-bold text-zinc-300 print:text-black">
-                          {dishPortions % 1 === 0 ? dishPortions : dishPortions.toFixed(1)} מנות
+                          {dishPortions} מנות
                         </td>
                       </tr>
                     )

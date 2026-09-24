@@ -4,6 +4,7 @@ import { db } from '@/db'
 import { orders, orderDishes, dishes, dishIngredients, ingredients, shopEvents, shopOrders, shopOrderItems, shopProducts, shopProductIngredients, shopProductVariants, savedShoppingLists, savedShoppingListItems, profiles } from '@/db/schema'
 import { eq, and, gte, lte, inArray, sql, desc } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
+import { countSplitCourses, dishServedPortions } from '@/utils/costing'
 
 interface UnifiedIngredient {
   id: string
@@ -50,21 +51,10 @@ export async function getUnifiedShoppingList(startDateStr: string, endDateStr: s
         .innerJoin(dishes, eq(orderDishes.dish_id, dishes.id))
         .where(eq(orderDishes.order_id, order.id))
 
-      // Categorize starters/mains for extra surcharge calculations matching catering logic
-      let startersCount = 0
-      let mainsCount = 0
-      associatedDishes.forEach(d => {
-        if (d.category === 'ראשונות') startersCount++
-        if (d.category === 'עיקריות') mainsCount++
-      })
+      const splitCounts = countSplitCourses(associatedDishes.map(d => d.category))
 
       for (const d of associatedDishes) {
-        let portionsCount = order.portions
-        if (d.category === 'ראשונות' && startersCount > 0) {
-          portionsCount = Math.ceil((order.portions / startersCount) * 1.13)
-        } else if (d.category === 'עיקריות' && mainsCount > 0) {
-          portionsCount = Math.ceil((order.portions / mainsCount) * 1.13)
-        }
+        const portionsCount = dishServedPortions(d.category, order.portions, splitCounts)
 
         const dishIngs = await db
           .select({
@@ -445,20 +435,10 @@ export async function calculateUnifiedShoppingList(cateringOrderIds: string[], s
           .innerJoin(dishes, eq(orderDishes.dish_id, dishes.id))
           .where(eq(orderDishes.order_id, order.id))
 
-        let startersCount = 0
-        let mainsCount = 0
-        associatedDishes.forEach(d => {
-          if (d.category === 'ראשונות') startersCount++
-          if (d.category === 'עיקריות') mainsCount++
-        })
+        const splitCounts = countSplitCourses(associatedDishes.map(d => d.category))
 
         for (const d of associatedDishes) {
-          let portionsCount = order.portions
-          if (d.category === 'ראשונות' && startersCount > 0) {
-            portionsCount = Math.ceil((order.portions / startersCount) * 1.13)
-          } else if (d.category === 'עיקריות' && mainsCount > 0) {
-            portionsCount = Math.ceil((order.portions / mainsCount) * 1.13)
-          }
+          const portionsCount = dishServedPortions(d.category, order.portions, splitCounts)
 
           const dishIngs = await db
             .select({

@@ -25,6 +25,45 @@ export interface AggregationResult {
   grandTotal: number
 }
 
+/** Courses that are cooked with a surplus over the ordered portions. */
+const SURPLUS_CATEGORIES = ['ראשונות', 'עיקריות', 'קינוחים']
+/** Courses served as several options that split the guests between them. */
+const SPLIT_CATEGORIES = ['ראשונות', 'עיקריות']
+
+/**
+ * The kitchen always makes 12% more than the order's portions of starters, mains
+ * and desserts. The order itself keeps the real guest count (the client pays for
+ * that); only production, purchasing and cost use the padded count.
+ * Integer math on purpose: 50 * 1.12 in floats is 56.000…01 and would ceil to 57.
+ */
+export function withServingSurplus(portions: number): number {
+  return Math.ceil((portions * 112) / 100)
+}
+
+/** How many dishes of each split course the order has, e.g. 2 starters and 2 mains. */
+export function countSplitCourses(categories: (string | null | undefined)[]): Record<string, number> {
+  const counts: Record<string, number> = {}
+  categories.forEach((category) => {
+    if (category && SPLIT_CATEGORIES.includes(category)) counts[category] = (counts[category] || 0) + 1
+  })
+  return counts
+}
+
+/**
+ * Portions to actually make of one dish: 50 guests with 2 mains → 56 → 28 of each.
+ * Always a whole number, rounded up.
+ */
+export function dishServedPortions(
+  category: string | null | undefined,
+  portions: number,
+  splitCounts: Record<string, number>
+): number {
+  if (!category || !SURPLUS_CATEGORIES.includes(category)) return portions
+  const padded = withServingSurplus(portions)
+  const options = splitCounts[category] || 0
+  return options > 0 ? Math.ceil(padded / options) : padded
+}
+
 export function aggregateOrderIngredients(
   orderDishes: any[],
   portions: number,
@@ -47,25 +86,13 @@ export function aggregateOrderIngredients(
     }
   }
 
-  // Count starters and mains to divide portions with 13% surcharge
-  let startersCount = 0
-  let mainsCount = 0
-  orderDishes?.forEach((od) => {
-    const category = od.dishes?.category
-    if (category === 'ראשונות') startersCount++
-    if (category === 'עיקריות') mainsCount++
-  })
+  const splitCounts = countSplitCourses((orderDishes || []).map((od) => od.dishes?.category))
 
   orderDishes?.forEach((od) => {
     const dish = od.dishes
     if (!dish) return
 
-    let dishPortions = portions
-    if (dish.category === 'ראשונות' && startersCount > 0) {
-      dishPortions = Math.ceil((portions / startersCount) * 1.13)
-    } else if (dish.category === 'עיקריות' && mainsCount > 0) {
-      dishPortions = Math.ceil((portions / mainsCount) * 1.13)
-    }
+    const dishPortions = dishServedPortions(dish.category, portions, splitCounts)
 
     dish.dish_ingredients?.forEach((di: any) => {
       const ing = di.ingredients
@@ -100,7 +127,7 @@ export function aggregateOrderIngredients(
   })
 
   // Add special automatically calculated ingredients:
-  // a) Rolls (לחמניה): 33% more than portions, rounded up to nearest 5.
+  // a) Rolls (לחמניה): 33% more than the portions made (with the 12% surplus), rounded up to nearest 5.
   // b) Salad 4L Box (קופסת סלט 4 ליטר): For each salad dish, ceil(portions / 50).
   // c) Disposable Tray (מגש חד פעמי): For each dish in category "ראשונות", "תוספות", "עיקריות", "קינוחים", ceil(portions / 50).
 
@@ -110,7 +137,7 @@ export function aggregateOrderIngredients(
 
   // Add Rolls
   if (rollsIng && portions > 0) {
-    const rollsQty = Math.ceil((portions * 1.33) / 5) * 5
+    const rollsQty = Math.ceil((withServingSurplus(portions) * 1.33) / 5) * 5
     const rollsCost = rollsQty * Number(rollsIng.cost_per_unit || 0)
     
     const ingId = rollsIng.id
@@ -125,7 +152,7 @@ export function aggregateOrderIngredients(
         dishes: [],
       }
     }
-    map[ingId].autoNote = 'מחושב אוטומטית לפי מספר הסועדים'
+    map[ingId].autoNote = 'מחושב אוטומטית לפי מספר הסועדים + 12%'
     map[ingId].totalQuantity += rollsQty
     map[ingId].totalCost += rollsCost
     grandTotal += rollsCost
