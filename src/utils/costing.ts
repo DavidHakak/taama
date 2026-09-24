@@ -127,7 +127,8 @@ export function aggregateOrderIngredients(
   })
 
   // Add special automatically calculated ingredients:
-  // a) Rolls (לחמניה): 33% more than the portions made (with the 12% surplus), rounded up to nearest 5.
+  // a) Rolls (לחמניה): their own rule, not the dishes' 12% surplus: 15% more than the guests but
+  //    never fewer than 10 extra, rounded up to the nearest 5 (40 guests → 50, 100 guests → 115).
   // b) Salad 4L Box (קופסת סלט 4 ליטר): For each salad dish, ceil(portions / 50).
   // c) Disposable Tray (מגש חד פעמי): For each dish in category "ראשונות", "תוספות", "עיקריות", "קינוחים", ceil(portions / 50).
 
@@ -137,7 +138,8 @@ export function aggregateOrderIngredients(
 
   // Add Rolls
   if (rollsIng && portions > 0) {
-    const rollsQty = Math.ceil((withServingSurplus(portions) * 1.33) / 5) * 5
+    const rollsExtra = Math.max(10, Math.ceil((portions * 15) / 100))
+    const rollsQty = Math.ceil((portions + rollsExtra) / 5) * 5
     const rollsCost = rollsQty * Number(rollsIng.cost_per_unit || 0)
     
     const ingId = rollsIng.id
@@ -152,7 +154,7 @@ export function aggregateOrderIngredients(
         dishes: [],
       }
     }
-    map[ingId].autoNote = 'מחושב אוטומטית לפי מספר הסועדים + 12%'
+    map[ingId].autoNote = 'מחושב אוטומטית: 15% מעל מספר הסועדים, לפחות 10 יותר'
     map[ingId].totalQuantity += rollsQty
     map[ingId].totalCost += rollsCost
     grandTotal += rollsCost
