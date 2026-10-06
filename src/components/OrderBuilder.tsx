@@ -25,6 +25,7 @@ import {
   ShoppingCart,
   Wallet,
   CalendarClock,
+  Printer,
 } from 'lucide-react'
 import Link from 'next/link'
 import { CustomSelect } from '@/components/ui/CustomSelect'
@@ -812,6 +813,96 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
     }
   }
 
+  // מדפיס את רשימת הקניות בשחור-לבן דרך iframe נסתר, מהנתונים שמחושבים כרגע במסך
+  const printShoppingList = (groups: { category: string; items: AggregatedIngredient[] }[]) => {
+    const esc = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    const qty = (n: number, unit: string) => `${Number(n.toFixed(2))} ${esc(getUnitLabel(unit))}`
+
+    const sections = groups
+      .map(
+        (group) => `
+          <section>
+            <h2>${esc(group.category)} <span>(${group.items.length})</span></h2>
+            ${group.items
+              .map(
+                (item) => `
+                  <div class="item">
+                    <div class="row">
+                      <span class="box">${purchasedIngredients.has(item.ingredientId) ? '✓' : ''}</span>
+                      <span class="name">${esc(item.ingredientName)}</span>
+                      <span class="qty">${qty(item.totalQuantity, item.unit)}</span>
+                    </div>
+                    ${
+                      item.dishes.length > 0
+                        ? `<ul>${item.dishes
+                            .map((d) => `<li><span>${esc(d.dishName)}</span><span>${qty(d.quantity, item.unit)}</span></li>`)
+                            .join('')}</ul>`
+                        : ''
+                    }
+                    ${item.autoNote ? `<p class="note">${esc(item.autoNote)}</p>` : ''}
+                  </div>`
+              )
+              .join('')}
+          </section>`
+      )
+      .join('')
+
+    const dateLabel = eventDate ? new Date(eventDate).toLocaleDateString('he-IL') : ''
+    const html = `<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<title>רשימת קניות${clientName ? ` - ${esc(clientName)}` : ''}</title>
+<style>
+  @page { margin: 12mm; }
+  * { box-sizing: border-box; color: #000 !important; background: #fff !important; }
+  body { font-family: Arial, Helvetica, sans-serif; margin: 0; font-size: 12px; }
+  header { border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 10px; }
+  header h1 { font-size: 18px; margin: 0 0 4px; }
+  header p { margin: 0; font-size: 12px; }
+  section { margin-bottom: 12px; }
+  h2 { font-size: 14px; margin: 0 0 4px; padding: 3px 0; border-bottom: 1px solid #000; }
+  h2 span { font-weight: normal; font-size: 11px; }
+  .item { padding: 4px 0; border-bottom: 1px dotted #888; break-inside: avoid; }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .box { width: 14px; height: 14px; border: 1.5px solid #000; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
+  .name { flex: 1; font-weight: bold; font-size: 13px; }
+  .qty { font-weight: bold; white-space: nowrap; }
+  ul { list-style: none; margin: 2px 22px 0 0; padding: 0; }
+  li { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; }
+  li span:last-child { white-space: nowrap; }
+  .note { margin: 2px 22px 0 0; font-size: 11px; font-style: italic; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>רשימת קניות${clientName ? ` – ${esc(clientName)}` : ''}</h1>
+    <p>${dateLabel ? `תאריך אירוע: ${dateLabel} · ` : ''}${portions || 0} מנות</p>
+  </header>
+  ${sections}
+</body>
+</html>`
+
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0'
+    document.body.appendChild(iframe)
+    const doc = iframe.contentWindow?.document
+    if (!doc || !iframe.contentWindow) {
+      iframe.remove()
+      return
+    }
+    doc.open()
+    doc.write(html)
+    doc.close()
+    const win = iframe.contentWindow
+    win.onafterprint = () => setTimeout(() => iframe.remove(), 0)
+    setTimeout(() => {
+      win.focus()
+      win.print()
+    }, 50)
+  }
+
   if (loading) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center min-h-[50vh]" dir="rtl">
@@ -1511,6 +1602,20 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                             style={{ width: `${purchasedPct}%` }}
                           />
                         </div>
+                      </div>
+                    )}
+
+                    {totalCount > 0 && (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-bold text-zinc-400">מוצרים לרכישה</span>
+                        <button
+                          type="button"
+                          onClick={() => printShoppingList(shoppingGroups)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/40 border border-zinc-800 hover:border-zinc-600 hover:bg-zinc-900 text-zinc-400 hover:text-zinc-100 text-[10px] font-semibold transition-all cursor-pointer"
+                        >
+                          <Printer className="h-3 w-3 shrink-0" />
+                          הדפס רשימה
+                        </button>
                       </div>
                     )}
 
