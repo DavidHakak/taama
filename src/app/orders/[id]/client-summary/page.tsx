@@ -10,6 +10,13 @@ import {
   AlertCircle,
   Phone,
 } from 'lucide-react'
+import {
+  DEFAULT_DISH_CATEGORIES,
+  FALLBACK_CATEGORY,
+  collectCategories,
+  inCategory,
+  isOnMenu,
+} from '@/utils/categories'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -19,6 +26,7 @@ interface Dish {
   id: string
   name: string
   category: string
+  is_menu_item: boolean
 }
 
 interface OrderDish {
@@ -39,8 +47,6 @@ interface Order {
   quote_delivery_price: number
   order_dishes: OrderDish[]
 }
-
-const CATEGORIES = ["סלטים", "ראשונות", "עיקריות", "תוספות", "קינוחים"]
 
 export default function ClientSummaryPage({ params }: PageProps) {
   const resolvedParams = use(params)
@@ -86,7 +92,7 @@ export default function ClientSummaryPage({ params }: PageProps) {
         // Fetch all dishes
         const { data: allDishesData, error: dishesError } = await supabase
           .from('dishes')
-          .select('id, name, category')
+          .select('id, name, category, is_menu_item')
           .order('name', { ascending: true })
 
         if (dishesError) throw dishesError
@@ -156,6 +162,11 @@ export default function ClientSummaryPage({ params }: PageProps) {
   const hasStarters = order.order_dishes?.some(
     (od) => od.dishes?.category === 'ראשונות'
   )
+
+  // The client sees the whole menu with their picks ticked, plus any off-menu
+  // ("external") dish only when it was added to this order by hand
+  const isInOrder = (dishId: string) => order.order_dishes?.some((od) => od.dishes?.id === dishId)
+  const visibleDishes = allDishes.filter((d) => isOnMenu(d) || isInOrder(d.id))
 
   const finalPortionPrice = basePrice + (hasStarters ? startersExtra : 0) - portionDiscount
   const portionsTotal = finalPortionPrice * portionsCount
@@ -270,11 +281,11 @@ export default function ClientSummaryPage({ params }: PageProps) {
 
           {/* Group dishes by category */}
           <div className="space-y-10 print:space-y-8">
-            {CATEGORIES.map((category) => {
+            {collectCategories(visibleDishes, DEFAULT_DISH_CATEGORIES).map((category) => {
               // If starters and startersExtra is 0, skip starters entirely
               if (category === "ראשונות" && startersExtra === 0) return null
 
-              const catDishes = allDishes.filter((d) => d.category === category)
+              const catDishes = inCategory(visibleDishes, category)
               if (catDishes.length === 0) return null
 
               return (
@@ -284,6 +295,8 @@ export default function ClientSummaryPage({ params }: PageProps) {
                       <span>שדרוג למנות ראשונות <span className="text-xs font-semibold opacity-70 font-mono">(+₪{startersExtra} למנה)</span></span>
                     ) : category === "סלטים" ? (
                       "מבחר סלטים:"
+                    ) : category === FALLBACK_CATEGORY ? (
+                      "מנות נוספות:"
                     ) : (
                       `${category}:`
                     )}
@@ -294,7 +307,7 @@ export default function ClientSummaryPage({ params }: PageProps) {
                     : "columns-1 sm:columns-2 print:columns-2"
                     }`}>
                     {catDishes.map((dish) => {
-                      const isChecked = order.order_dishes?.some((od) => od.dishes?.id === dish.id)
+                      const isChecked = isInOrder(dish.id)
 
                       return (
                         <li

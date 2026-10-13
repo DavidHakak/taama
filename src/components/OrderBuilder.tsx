@@ -30,12 +30,13 @@ import {
 import Link from 'next/link'
 import { CustomSelect } from '@/components/ui/CustomSelect'
 import { AnchoredDropdown } from '@/components/ui/AnchoredDropdown'
-import { DEFAULT_DISH_CATEGORIES, DEFAULT_INGREDIENT_CATEGORIES, collectCategories, inCategory, normalizeCategory } from '@/utils/categories'
+import { DEFAULT_DISH_CATEGORIES, DEFAULT_INGREDIENT_CATEGORIES, collectCategories, inCategory, isOnMenu, normalizeCategory } from '@/utils/categories'
 
 interface Dish {
   id: string
   name: string
   category: string
+  is_menu_item: boolean
   dish_ingredients: {
     quantity: number
     ingredients: {
@@ -163,6 +164,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
             id,
             name,
             category,
+            is_menu_item,
             dish_ingredients (
               quantity,
               ingredients (
@@ -1459,7 +1461,14 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                                                   : 'text-zinc-300 hover:bg-zinc-900/60'
                                                 }`}
                                             >
-                                              <span>{d.name}</span>
+                                              <span className="flex items-center gap-1.5 min-w-0">
+                                                <span className="truncate">{d.name}</span>
+                                                {!isOnMenu(d) && (
+                                                  <span className="shrink-0 text-[10px] font-bold text-zinc-400 border border-dashed border-zinc-700 rounded px-1.5">
+                                                    מחוץ לתפריט
+                                                  </span>
+                                                )}
+                                              </span>
                                               <span className="text-xxs text-zinc-400 shrink-0 font-mono">
                                                 ₪{cost.toFixed(2)}
                                               </span>

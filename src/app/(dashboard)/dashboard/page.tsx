@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   Loader2,
   AlertCircle,
+  BookOpen,
 } from 'lucide-react'
 
 interface Ingredient {
@@ -328,9 +329,19 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8" dir="rtl">
       {/* Header */}
-      <div className="text-right">
-        <h1 className="text-3xl font-extrabold text-white tracking-tight">לוח בקרה קייטרינג</h1>
-        <p className="text-zinc-400 text-sm mt-1">סקירה כללית בזמן אמת של פעילות הקייטרינג וניתוח עלויות המתכונים.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-right">
+        <div>
+          <h1 className="text-3xl font-extrabold text-white tracking-tight">לוח בקרה קייטרינג</h1>
+          <p className="text-zinc-400 text-sm mt-1">סקירה כללית בזמן אמת של פעילות הקייטרינג וניתוח עלויות המתכונים.</p>
+        </div>
+        <Link
+          href="/dishes/menu"
+          target="_blank"
+          className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-yellow-600 via-amber-500 to-yellow-600 hover:from-yellow-500 hover:via-amber-600 hover:to-yellow-500 text-pure-white font-bold text-sm rounded-xl shadow-lg shadow-amber-500/10 active:scale-[0.98] transition-all cursor-pointer shrink-0"
+        >
+          <BookOpen className="h-4 w-4" />
+          ייצוא תפריט ללקוחות
+        </Link>
       </div>
 
       {/* Metrics Row */}

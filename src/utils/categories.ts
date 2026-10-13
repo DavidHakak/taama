@@ -22,10 +22,20 @@ export const DEFAULT_DISH_CATEGORIES = [
   'עיקריות',
   'תוספות',
   'קינוחים',
+  FALLBACK_CATEGORY,
 ]
 
 export const normalizeCategory = (category?: string | null) =>
   category?.trim() || FALLBACK_CATEGORY
+
+/**
+ * Whether a dish belongs on the menu shown to clients (the exported menu, and the
+ * unticked options in an order's client summary). Dishes in "אחר" never do, and
+ * any other dish can be switched off as an "external" dish — those reach the client
+ * only when they were added to an order by hand.
+ */
+export const isOnMenu = (dish: { category?: string | null; is_menu_item?: boolean | null }) =>
+  dish.is_menu_item !== false && normalizeCategory(dish.category) !== FALLBACK_CATEGORY
 
 /** Known categories first in their shipped order, then anything else alphabetically, "אחר" always last. */
 export const compareCategories = (order: string[]) => (a: string, b: string) => {

@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import {
   UtensilsCrossed,
@@ -15,13 +17,17 @@ import {
   Scale,
   Sparkles,
   Search,
+  BookOpen,
 } from 'lucide-react'
 import { CustomSelect } from '@/components/ui/CustomSelect'
 import {
   DEFAULT_DISH_CATEGORIES,
   DEFAULT_INGREDIENT_CATEGORIES,
+  FALLBACK_CATEGORY,
   collectCategories,
   inCategory,
+  isOnMenu,
+  normalizeCategory,
 } from '@/utils/categories'
 import { AnchoredDropdown } from '@/components/ui/AnchoredDropdown'
 import { useCustomDialogs } from '@/hooks/useCustomDialogs'
@@ -45,6 +51,7 @@ interface Dish {
   id: string
   name: string
   category?: string
+  is_menu_item: boolean
   dish_ingredients: DishIngredient[]
 }
 
@@ -53,9 +60,48 @@ interface TempLineItem {
   quantity: string // string for input binding
 }
 
+// מתג "בתפריט ללקוחות" — הידית בצד ימין כשכבוי ונעה שמאלה כשדולק (RTL)
+function MenuSwitch({
+  checked,
+  disabled,
+  busy,
+  onToggle,
+  label,
+}: {
+  checked: boolean
+  disabled?: boolean
+  busy?: boolean
+  onToggle: () => void
+  label: string
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      title={label}
+      onClick={onToggle}
+      disabled={disabled || busy}
+      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
+        checked ? 'bg-amber-500 border-amber-400' : 'bg-zinc-800 border-zinc-700'
+      }`}
+    >
+      <span
+        className={`absolute inset-s-0.5 h-3.5 w-3.5 rounded-full bg-white shadow flex items-center justify-center transition-transform ${
+          checked ? '-translate-x-4' : 'translate-x-0'
+        }`}
+      >
+        {busy && <Loader2 className="h-2.5 w-2.5 text-amber-600 animate-spin" />}
+      </span>
+    </button>
+  )
+}
+
 
 export default function DishesPage() {
   const supabase = createClient()
+  const router = useRouter()
   const { showAlert, showConfirm, CustomDialogs } = useCustomDialogs()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -71,8 +117,12 @@ export default function DishesPage() {
   
   const [dishName, setDishName] = useState('')
   const [dishCategory, setDishCategory] = useState('')
+  const [dishOnMenu, setDishOnMenu] = useState(true)
   const [lineItems, setLineItems] = useState<TempLineItem[]>([])
   const [formSubmitting, setFormSubmitting] = useState(false)
+
+  // The dish whose menu switch is being saved right now
+  const [togglingDishId, setTogglingDishId] = useState<string | null>(null)
 
   // Searchable combobox state inside the builder
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null)
@@ -87,6 +137,7 @@ export default function DishesPage() {
     setSelectedDish(dish)
     setDishName(dish.name)
     setDishCategory(dish.category || '')
+    setDishOnMenu(dish.is_menu_item !== false)
     setActiveDropdown(null)
     
     const initialLines = dish.dish_ingredients.map((di) => ({
@@ -110,6 +161,7 @@ export default function DishesPage() {
           id,
           name,
           category,
+          is_menu_item,
           dish_ingredients (
             id,
             ingredient_id,
@@ -186,6 +238,7 @@ export default function DishesPage() {
     setSelectedDish(null)
     setDishName('')
     setDishCategory('')
+    setDishOnMenu(true)
     setLineItems([{ ingredientId: '', quantity: '1' }])
     setActiveDropdown(null)
     setIsModalOpen(true)
@@ -236,7 +289,7 @@ export default function DishesPage() {
       if (modalMode === 'create') {
         const { data, error: insertError } = await supabase
           .from('dishes')
-          .insert([{ name: dishName, category: dishCategory.trim() }])
+          .insert([{ name: dishName, category: dishCategory.trim(), is_menu_item: dishOnMenu }])
           .select()
           .single()
 
@@ -245,7 +298,7 @@ export default function DishesPage() {
       } else if (modalMode === 'edit' && dishId) {
         const { error: updateError } = await supabase
           .from('dishes')
-          .update({ name: dishName, category: dishCategory.trim() })
+          .update({ name: dishName, category: dishCategory.trim(), is_menu_item: dishOnMenu })
           .eq('id', dishId)
 
         if (updateError) throw updateError
@@ -275,6 +328,7 @@ export default function DishesPage() {
 
       setIsModalOpen(false)
       fetchData()
+      router.refresh()
     } catch (err: unknown) {
       console.error('Error saving recipe:', err)
       setError(err instanceof Error ? err.message : 'שגיאה בשמירת המתכון')
@@ -297,6 +351,7 @@ export default function DishesPage() {
 
           if (deleteError) throw deleteError
           fetchData()
+          router.refresh()
         } catch (err: unknown) {
           console.error('Error deleting dish:', err)
           setError(err instanceof Error ? err.message : 'שגיאה במחיקת המנה')
@@ -305,6 +360,28 @@ export default function DishesPage() {
       },
       'מחיקת מנה'
     )
+  }
+
+  // Switch a dish between the client menu and "external" (reaches the client only when added to an order)
+  const handleToggleMenuItem = async (dish: Dish) => {
+    const next = !dish.is_menu_item
+    setTogglingDishId(dish.id)
+    setError(null)
+    try {
+      const { error: updateError } = await supabase
+        .from('dishes')
+        .update({ is_menu_item: next })
+        .eq('id', dish.id)
+
+      if (updateError) throw updateError
+      setDishes((prev) => prev.map((d) => (d.id === dish.id ? { ...d, is_menu_item: next } : d)))
+      router.refresh()
+    } catch (err: unknown) {
+      console.error('Error updating dish menu flag:', err)
+      setError(err instanceof Error ? err.message : 'שגיאה בעדכון שיוך המנה לתפריט')
+    } finally {
+      setTogglingDishId(null)
+    }
   }
 
   const getUnitLabel = (unit: string) => {
@@ -344,13 +421,23 @@ export default function DishesPage() {
           </h1>
           <p className="text-zinc-400 text-sm mt-1">בנה מנות, הגדר רכיבים וחשב את עלות המנה באופן דינמי.</p>
         </div>
-        <button
-          onClick={handleOpenCreate}
-          className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-yellow-600 via-amber-500 to-yellow-600 hover:from-yellow-500 hover:via-amber-600 hover:to-yellow-500 text-pure-white font-bold text-sm rounded-xl shadow-lg shadow-amber-500/10 active:scale-[0.98] transition-all cursor-pointer shrink-0"
-        >
-          <Plus className="h-4 w-4" />
-          בנה מתכון חדש
-        </button>
+        <div className="flex flex-col sm:flex-row gap-3 shrink-0">
+          <Link
+            href="/dishes/menu"
+            target="_blank"
+            className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-zinc-950 border border-zinc-800 hover:border-amber-500/40 hover:bg-amber-500/5 text-amber-400 font-bold text-sm rounded-xl active:scale-[0.98] transition-all cursor-pointer"
+          >
+            <BookOpen className="h-4 w-4" />
+            ייצוא תפריט ללקוחות
+          </Link>
+          <button
+            onClick={handleOpenCreate}
+            className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-yellow-600 via-amber-500 to-yellow-600 hover:from-yellow-500 hover:via-amber-600 hover:to-yellow-500 text-pure-white font-bold text-sm rounded-xl shadow-lg shadow-amber-500/10 active:scale-[0.98] transition-all cursor-pointer"
+          >
+            <Plus className="h-4 w-4" />
+            בנה מתכון חדש
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -391,30 +478,61 @@ export default function DishesPage() {
           {dishCategories.map((category) => {
             const categoryDishes = inCategory(filteredDishes, category)
             if (categoryDishes.length === 0) return null
+            const isOtherCategory = category === FALLBACK_CATEGORY
+            const offMenuCount = categoryDishes.filter((d) => !isOnMenu(d)).length
 
             return (
               <div key={category} className="space-y-5">
-                <div className="flex items-center gap-3 border-r-4 border-amber-500 pr-3">
-                  <h2 className="text-xl font-black text-white">{category}</h2>
-                  <span className="text-xxs font-bold text-zinc-400 bg-zinc-950 px-2.5 py-0.5 rounded-full border border-zinc-900">
-                    {categoryDishes.length} מנות
-                  </span>
+                <div className="border-r-4 border-amber-500 pr-3 space-y-1">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-xl font-black text-white">{category}</h2>
+                    <span className="text-xxs font-bold text-zinc-400 bg-zinc-950 px-2.5 py-0.5 rounded-full border border-zinc-900">
+                      {categoryDishes.length} מנות
+                    </span>
+                    {!isOtherCategory && offMenuCount > 0 && (
+                      <span className="text-xxs font-bold text-zinc-400 bg-zinc-950 px-2.5 py-0.5 rounded-full border border-dashed border-zinc-800">
+                        {offMenuCount} מחוץ לתפריט
+                      </span>
+                    )}
+                  </div>
+                  {isOtherCategory && (
+                    <p className="text-xs text-zinc-400">
+                      מנות שאינן חלק מהתפריט — לא יופיעו בתפריט ללקוחות, ויופיעו בסיכום ללקוח רק כשתוסיף אותן ידנית להזמנה.
+                    </p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {categoryDishes.map((dish) => {
                     const cost = calculateDishCost(dish)
                     const ingredientCount = dish.dish_ingredients?.length || 0
+                    const onMenu = isOnMenu(dish)
                     return (
                       <div
                         key={dish.id}
-                        className="bg-zinc-950 border border-zinc-900 rounded-2xl p-6 shadow-xl hover:border-zinc-800 transition-all flex flex-col justify-between"
+                        className={`bg-zinc-950 border rounded-2xl p-6 shadow-xl hover:border-zinc-800 transition-all flex flex-col justify-between ${
+                          onMenu ? 'border-zinc-900' : 'border-dashed border-zinc-800'
+                        }`}
                       >
                         <div>
                           <div className="flex items-start justify-between gap-4 mb-3">
                             <h3 className="text-lg font-bold text-white leading-tight truncate">{dish.name}</h3>
                             <span className="shrink-0 inline-flex items-center px-2 py-0.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xxs font-extrabold text-zinc-400">
                               {ingredientCount} רכיבים
+                            </span>
+                          </div>
+
+                          {/* Client menu switch — dishes in "אחר" are always off the menu */}
+                          <div className="flex items-center gap-2.5">
+                            <MenuSwitch
+                              checked={onMenu}
+                              disabled={isOtherCategory}
+                              busy={togglingDishId === dish.id}
+                              onToggle={() => handleToggleMenuItem(dish)}
+                              label={isOtherCategory ? 'מנות בקטגוריית אחר תמיד מחוץ לתפריט' : 'חלק מהתפריט ללקוחות'}
+                            />
+                            <span className={`text-xs font-bold ${onMenu ? 'text-amber-400' : 'text-zinc-400'}`}>
+                              {onMenu ? 'בתפריט ללקוחות' : 'מחוץ לתפריט · רק בהוספה ידנית להזמנה'}
                             </span>
                           </div>
 
@@ -523,6 +641,35 @@ export default function DishesPage() {
                   />
                 </div>
               </div>
+
+              {(() => {
+                const otherSelected = normalizeCategory(dishCategory) === FALLBACK_CATEGORY
+                const onMenu = dishOnMenu && !otherSelected
+                return (
+                  <div className="flex items-start gap-3 p-3.5 bg-zinc-900/30 border border-zinc-800/50 rounded-xl">
+                    <div className="pt-0.5">
+                      <MenuSwitch
+                        checked={onMenu}
+                        disabled={otherSelected || formSubmitting}
+                        onToggle={() => setDishOnMenu(!dishOnMenu)}
+                        label="חלק מהתפריט ללקוחות"
+                      />
+                    </div>
+                    <div>
+                      <span className={`block text-sm font-bold ${onMenu ? 'text-amber-400' : 'text-zinc-300'}`}>
+                        {onMenu ? 'חלק מהתפריט ללקוחות' : 'מנה חיצונית — מחוץ לתפריט'}
+                      </span>
+                      <span className="block text-xs text-zinc-400 mt-0.5">
+                        {otherSelected
+                          ? 'מנות בקטגוריית "אחר" תמיד מחוץ לתפריט.'
+                          : onMenu
+                            ? 'תופיע בתפריט המיוצא ובסיכום ההזמנה ללקוח.'
+                            : 'לא תופיע בתפריט המיוצא, ותופיע בסיכום ללקוח רק כשתוסיף אותה ידנית להזמנה.'}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })()}
 
               <div>
                 <div className="flex items-center justify-between mb-4">

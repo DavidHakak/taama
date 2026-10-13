@@ -14,6 +14,8 @@ export const dishes = pgTable('dishes', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
   category: text('category'),
+  // false = מנה חיצונית: לא בתפריט ללקוחות, מופיעה ללקוח רק כשהוכנסה ידנית להזמנה
+  is_menu_item: boolean('is_menu_item').notNull().default(true),
   created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
