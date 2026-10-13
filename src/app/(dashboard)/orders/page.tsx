@@ -15,6 +15,7 @@ import {
   AlertCircle,
   X,
   Filter,
+  Receipt,
 } from "lucide-react";
 
 interface Ingredient {
@@ -42,6 +43,8 @@ interface OrderDish {
 interface Order {
   id: string;
   client_name: string;
+  issues_receipt: boolean | null;
+  customers: { name: string } | null;
   event_date: string;
   status: string;
   portions: number;
@@ -76,6 +79,10 @@ export default function OrdersPage() {
           `
           id,
           client_name,
+          issues_receipt,
+          customers (
+            name
+          ),
           event_date,
           status,
           portions,
@@ -336,6 +343,30 @@ export default function OrdersPage() {
                           >
                             {order.client_name}
                           </Link>
+                        )}
+                        {(order.customers || order.issues_receipt !== null) && (
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+                            {order.customers &&
+                              order.customers.name !== order.client_name && (
+                                <span className="text-xxs font-semibold text-zinc-500">
+                                  {order.customers.name}
+                                </span>
+                              )}
+                            {order.issues_receipt !== null && (
+                              <span
+                                className={`inline-flex items-center gap-1 text-[10px] font-bold ${
+                                  order.issues_receipt
+                                    ? "text-zinc-300"
+                                    : "text-zinc-600"
+                                }`}
+                              >
+                                {order.issues_receipt && (
+                                  <Receipt className="h-3 w-3" />
+                                )}
+                                {order.issues_receipt ? "עם קבלה" : "ללא קבלה"}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </td>
                       <td className="py-5 px-6">

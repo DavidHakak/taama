@@ -371,7 +371,7 @@ export async function updateOrderStatus(orderId: string, status: string) {
 export async function toggleUserBlock(userId: string, isBlocked: boolean) {
   try {
     await db.update(profiles).set({ is_blocked: isBlocked }).where(eq(profiles.id, userId))
-    revalidatePath('/shop-admin')
+    revalidatePath('/registered-users')
     return { success: true }
   } catch (err: any) {
     console.error('Error toggling block status:', err)

@@ -28,6 +28,7 @@ import {
   Calendar,
   ListTodo,
   Megaphone,
+  UserCog,
 } from 'lucide-react'
 import React from 'react'
 
@@ -71,10 +72,10 @@ export default function DashboardLayout({
 
   // מיפוי הנתיב הנוכחי לקבוצת התפריט אליה הוא שייך
   const sectionForPath = (path: string): string | null => {
-    if (['/ingredients', '/dishes', '/orders'].some((p) => path.startsWith(p))) return 'catering'
+    if (['/ingredients', '/dishes', '/orders', '/customers'].some((p) => path.startsWith(p))) return 'catering'
     if (path.startsWith('/shop-admin')) return 'shabbat'
     if (path.startsWith('/shopping-list')) return 'procurement'
-    if (['/users', '/tasks', '/broadcast', '/analytics'].some((p) => path.startsWith(p))) return 'management'
+    if (['/users', '/registered-users', '/tasks', '/broadcast', '/analytics'].some((p) => path.startsWith(p))) return 'management'
     return null
   }
 
@@ -169,6 +170,7 @@ export default function DashboardLayout({
 
   const cateringItems = [
     { name: 'הזמנות ואירועים', href: '/orders', icon: ClipboardList },
+    { name: 'לקוחות', href: '/customers', icon: Users },
     { name: 'מנות ומתכונים', href: '/dishes', icon: UtensilsCrossed },
     { name: 'רכיבים ומלאי', href: '/ingredients', icon: Beef },
   ]
@@ -179,7 +181,7 @@ export default function DashboardLayout({
     { name: 'ניהול מבצעים', href: '/shop-admin/promotions', icon: Percent },
     { name: 'קודי קופון', href: '/shop-admin/coupons', icon: Gift },
     { name: 'אירועי מכירה', href: '/shop-admin/events', icon: Calendar },
-    { name: 'ניהול לקוחות', href: '/shop-admin/customers', icon: Users },
+    { name: 'לקוחות', href: '/shop-admin/customers', icon: Users },
     { name: 'הגדרות חנות', href: '/shop-admin/settings', icon: Settings },
   ]
 
@@ -189,6 +191,7 @@ export default function DashboardLayout({
 
   const managementItems = [
     ...(isAdmin ? [{ name: 'ניהול משתמשים', href: '/users', icon: User }] : []),
+    { name: 'משתמשים רשומים וחסימות', href: '/registered-users', icon: UserCog },
     { name: 'ניהול משימות', href: '/tasks', icon: ListTodo },
     { name: 'שליחת הודעות ללקוחות', href: '/broadcast', icon: Megaphone },
     { name: 'אנליטיקות וסטטיסטיקות', href: '/analytics', icon: TrendingUp },

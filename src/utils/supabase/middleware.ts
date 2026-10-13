@@ -73,7 +73,9 @@ export async function updateSession(request: NextRequest) {
     path.startsWith('/dishes') ||
     path.startsWith('/ingredients') ||
     path.startsWith('/orders') ||
+    path.startsWith('/customers') ||
     path.startsWith('/users') ||
+    path.startsWith('/registered-users') ||
     path.startsWith('/shop-admin') ||
     path.startsWith('/shopping-list') ||
     path.startsWith('/analytics') ||

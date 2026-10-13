@@ -21,7 +21,7 @@ export default function CustomersTab({
   const router = useRouter()
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-bold text-white">ניהול לקוחות וחסימות</h2>
+      <h2 className="text-lg font-bold text-white">משתמשים רשומים</h2>
 
       <div className="bg-zinc-950 border border-zinc-900 rounded-2xl overflow-x-auto shadow-xl">
         <table className="w-full text-right border-collapse">

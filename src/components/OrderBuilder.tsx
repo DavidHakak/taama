@@ -26,11 +26,18 @@ import {
   Wallet,
   CalendarClock,
   Printer,
+  Building2,
+  Phone,
+  Mail,
+  Receipt,
+  UserPlus,
+  Edit2,
 } from 'lucide-react'
 import Link from 'next/link'
 import { CustomSelect } from '@/components/ui/CustomSelect'
 import { AnchoredDropdown } from '@/components/ui/AnchoredDropdown'
 import { DEFAULT_DISH_CATEGORIES, DEFAULT_INGREDIENT_CATEGORIES, collectCategories, inCategory, isOnMenu, normalizeCategory } from '@/utils/categories'
+import CustomerFormModal, { CUSTOMER_COLUMNS, CUSTOMER_TYPE_LABELS, type Customer } from '@/components/customers/CustomerFormModal'
 
 interface Dish {
   id: string
@@ -76,8 +83,13 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
   const [dishesList, setDishesList] = useState<Dish[]>([])
   const [ingredientsCatalog, setIngredientsCatalog] = useState<any[]>([])
 
+  const [customers, setCustomers] = useState<Customer[]>([])
+
   // Form States
   const [clientName, setClientName] = useState('')
+  const [customerId, setCustomerId] = useState('')
+  // null = טרם נבחר; חובה לבחור לפני שמירה
+  const [issuesReceipt, setIssuesReceipt] = useState<boolean | null>(null)
   const [eventDate, setEventDate] = useState('')
   const [status, setStatus] = useState('Draft')
   const [portions, setPortions] = useState<number>(10)
@@ -127,6 +139,11 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
 
   // Modal states
   const [summarySelectedDishes, setSummarySelectedDishes] = useState<string[]>([])
+
+  // חלון לקוח: יצירת לקוח חדש מתוך ההזמנה, או עריכת הלקוח שנבחר
+  const [customerModalOpen, setCustomerModalOpen] = useState(false)
+  const [customerModalName, setCustomerModalName] = useState('')
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
 
   // Combobox dropdown state
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null)
@@ -189,6 +206,14 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
         if (ingredientsError) throw ingredientsError
         setIngredientsCatalog(ingredientsData || [])
 
+        const { data: customersData, error: customersError } = await supabase
+          .from('customers')
+          .select(CUSTOMER_COLUMNS)
+          .order('name', { ascending: true })
+
+        if (customersError) throw customersError
+        setCustomers((customersData as Customer[]) || [])
+
         // 2. If editing, fetch the order and its selected dishes
         if (orderId) {
           const { data: orderData, error: orderError } = await supabase
@@ -196,6 +221,8 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
             .select(`
               id,
               client_name,
+              customer_id,
+              issues_receipt,
               event_date,
               status,
               portions,
@@ -217,6 +244,8 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
           if (orderError) throw orderError
 
           setClientName(orderData.client_name)
+          setCustomerId(orderData.customer_id || '')
+          setIssuesReceipt(orderData.issues_receipt ?? null)
           setEventDate(orderData.event_date)
           setStatus(orderData.status)
           setInitialStatus(orderData.status)
@@ -465,6 +494,45 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
     setPaymentTaskExists(true)
   }
 
+  /* ------------------------------ לקוח ההזמנה ------------------------------ */
+
+  const selectedCustomer = customers.find((c) => c.id === customerId) || null
+
+  const applyCustomer = (next: Customer) => {
+    // שם האירוע מתמלא משם הלקוח, כל עוד לא הוקלד בו שם אחר
+    const current = clientName.trim()
+    if (!current || (selectedCustomer && current === selectedCustomer.name)) {
+      setClientName(next.name)
+    }
+    setCustomerId(next.id)
+  }
+
+  const openCustomerModal = (customer: Customer | null, initialName = '') => {
+    setEditingCustomer(customer)
+    setCustomerModalName(initialName)
+    setCustomerModalOpen(true)
+  }
+
+  const handleCustomerSelect = (value: string) => {
+    const existing = customers.find((c) => c.id === value)
+    if (existing) {
+      applyCustomer(existing)
+      return
+    }
+    // ערך שאינו מזהה לקוח הוא טקסט החיפוש, שנבחר כ"הוסף לקוח חדש"
+    openCustomerModal(null, value)
+  }
+
+  const handleCustomerSaved = (saved: Customer) => {
+    applyCustomer(saved)
+    setCustomers((prev) =>
+      [...prev.filter((c) => c.id !== saved.id), saved].sort((a, b) => a.name.localeCompare(b.name, 'he'))
+    )
+    setCustomerModalOpen(false)
+    setEditingCustomer(null)
+    router.refresh()
+  }
+
   // Add a dish row
   const addDishRow = () => {
     setSelectedDishes([...selectedDishes, { dishId: '', isPrepared: false }])
@@ -561,8 +629,14 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
 
   // Validation Helper
   const validateOrder = (validDishes: SelectedDishItem[]): string | null => {
+    // הזמנה ששולמה נעולה, ולכן הזמנות ישנות בלי לקוח/קבלה לא נחסמות מעדכון עלות בפועל
+    if (!isLocked && (!customerId || issuesReceipt === null)) {
+      // השדות נמצאים במקטע "פרטי האירוע", שמתחיל מכווץ
+      setOpenSections((prev) => ({ ...prev, details: true }))
+      return !customerId ? 'יש לבחור לקוח להזמנה' : 'יש לבחור האם מוציאים קבלה על ההזמנה'
+    }
     if (!clientName.trim()) {
-      return 'שם הלקוח / האירוע הוא שדה חובה'
+      return 'שם האירוע הוא שדה חובה'
     }
     if (!eventDate) {
       return 'תאריך האירוע הוא שדה חובה'
@@ -633,6 +707,8 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
 
       const orderPayload = {
         client_name: clientName,
+        customer_id: customerId || null,
+        issues_receipt: issuesReceipt,
         event_date: eventDate,
         status: status,
         portions: portions,
@@ -725,6 +801,8 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
 
       const orderPayload = {
         client_name: clientName,
+        customer_id: customerId || null,
+        issues_receipt: issuesReceipt,
         event_date: eventDate,
         status: status,
         portions: portions,
@@ -1049,10 +1127,122 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
             {openSections.details && (
             <div className="px-6 pb-6 space-y-5">
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                  לקוח <span className="text-amber-500">*</span>
+                </label>
+                <div className="flex items-stretch gap-2">
+                  <CustomSelect
+                    className="flex-1 min-w-0"
+                    // לקוחות הקייטרינג בלבד, וגם הלקוח שכבר משויך להזמנה אם השיוך שלו השתנה
+                    options={customers.filter((c) => c.is_catering || c.id === customerId).map((c) => ({
+                      value: c.id,
+                      label: c.name,
+                      category: CUSTOMER_TYPE_LABELS[c.customer_type],
+                      subText: c.phone,
+                    }))}
+                    value={customerId}
+                    onChange={handleCustomerSelect}
+                    disabled={isLocked || saving}
+                    groupByCategory
+                    categoriesOrder={[CUSTOMER_TYPE_LABELS.private, CUSTOMER_TYPE_LABELS.company]}
+                    creatable
+                    createLabel={(query) => `הוסף לקוח חדש "${query}"`}
+                    searchPlaceholder="חיפוש לפי שם או טלפון..."
+                    placeholder={customers.length === 0 ? 'אין עדיין לקוחות, הוסף לקוח חדש' : 'בחר לקוח...'}
+                  />
+                  <button
+                    type="button"
+                    disabled={isLocked || saving}
+                    onClick={() => openCustomerModal(null)}
+                    title="לקוח חדש"
+                    className="inline-flex items-center justify-center gap-1.5 px-3 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 text-zinc-300 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    <span className="hidden sm:inline">חדש</span>
+                  </button>
+                </div>
+
+                {selectedCustomer && (
+                  <div className="mt-2 px-3 py-2 bg-zinc-900/30 border border-zinc-900 rounded-xl flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <span className="inline-flex items-center gap-1 text-xxs font-extrabold text-zinc-300">
+                      {selectedCustomer.customer_type === 'company' ? (
+                        <Building2 className="h-3.5 w-3.5 text-zinc-500" />
+                      ) : (
+                        <User className="h-3.5 w-3.5 text-zinc-500" />
+                      )}
+                      {CUSTOMER_TYPE_LABELS[selectedCustomer.customer_type]}
+                      {selectedCustomer.company_number && (
+                        <span className="font-mono font-semibold text-zinc-400">· ח.פ {selectedCustomer.company_number}</span>
+                      )}
+                    </span>
+                    <a
+                      href={`tel:${selectedCustomer.phone}`}
+                      dir="ltr"
+                      className="inline-flex items-center gap-1 text-xxs font-mono font-semibold text-zinc-400 hover:text-amber-400 transition-colors"
+                    >
+                      <Phone className="h-3.5 w-3.5 text-zinc-500" />
+                      {selectedCustomer.phone}
+                    </a>
+                    {selectedCustomer.email && (
+                      <a
+                        href={`mailto:${selectedCustomer.email}`}
+                        className="inline-flex items-center gap-1 text-xxs font-semibold text-zinc-400 hover:text-amber-400 transition-colors min-w-0 truncate"
+                      >
+                        <Mail className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
+                        {selectedCustomer.email}
+                      </a>
+                    )}
+                    {!isLocked && (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => openCustomerModal(selectedCustomer)}
+                        className="mr-auto ml-0 inline-flex items-center gap-1 text-[10px] font-bold text-zinc-500 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <Edit2 className="h-3 w-3" />
+                        ערוך פרטים
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                  קבלה <span className="text-amber-500">*</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { label: 'מוציא קבלה', value: true },
+                    { label: 'ללא קבלה', value: false },
+                  ].map((opt) => {
+                    const isSelected = issuesReceipt === opt.value
+                    return (
+                      <button
+                        key={String(opt.value)}
+                        type="button"
+                        disabled={isLocked || saving}
+                        onClick={() => setIssuesReceipt(opt.value)}
+                        className={`inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-xl border transition-all cursor-pointer disabled:cursor-not-allowed ${isSelected
+                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                            : 'bg-black/40 text-zinc-400 border-zinc-900 hover:text-zinc-200'
+                          } ${isLocked ? 'opacity-60' : ''}`}
+                      >
+                        {opt.value && <Receipt className="h-4 w-4" />}
+                        {opt.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="md:col-span-2">
                 <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-                  שם הלקוח / האירוע
+                  שם האירוע
                 </label>
                 <div className="relative">
                   <User className="absolute right-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-zinc-400" />
@@ -2020,6 +2210,19 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
           </div>
         </div>
       )}
+
+      <CustomerFormModal
+        isOpen={customerModalOpen}
+        customer={editingCustomer}
+        initialName={customerModalName}
+        defaultSegment="catering"
+        requireCatering
+        onClose={() => {
+          setCustomerModalOpen(false)
+          setEditingCustomer(null)
+        }}
+        onSaved={handleCustomerSaved}
+      />
 
       {/* פופאפ: לאילו מנות באירוע שייך חומר הגלם */}
       {usageItem && (

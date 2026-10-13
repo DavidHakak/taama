@@ -1,29 +1,16 @@
 import React from 'react'
-import { db } from '@/db'
-import { profiles } from '@/db/schema'
-import { desc } from 'drizzle-orm'
-import CustomersTab from '@/components/shop-admin/CustomersTab'
 import AdminPageClient from '@/components/shop-admin/AdminPageClient'
+import CustomersBook from '@/components/customers/CustomersBook'
 import { Users } from 'lucide-react'
 
-export const revalidate = 0
-
-export default async function ShopCustomersPage() {
-  // 1. Fetch customer profiles
-  const customers = await db
-    .select()
-    .from(profiles)
-    .orderBy(desc(profiles.created_at))
-
+export default function ShopCustomersPage() {
   return (
     <AdminPageClient
-      title="ניהול לקוחות חנות שבת"
-      subtitle="צפה בפרטי הלקוחות של החנות ונהל חסימות גישה"
+      title="לקוחות חנות שבת"
+      subtitle="פרטי הלקוחות הפרטיים והחברות של חנות השבת"
       icon={<Users className="h-6 w-6 text-amber-500" />}
     >
-      <CustomersTab
-        customers={customers}
-      />
+      <CustomersBook segment="shabbat" />
     </AdminPageClient>
   )
 }
