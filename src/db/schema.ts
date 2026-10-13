@@ -30,9 +30,28 @@ export const dishIngredients = pgTable('dish_ingredients', {
   quantity: numeric('quantity', { precision: 10, scale: 3 }).notNull().default('0.000'),
 })
 
+// ספר הלקוחות של הקייטרינג ושל חנות השבת
+// (נפרד מ-profiles, שבה נמצאים המשתמשים הרשומים באתר)
+export const customers = pgTable('customers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  customer_type: text('customer_type').notNull(), // 'private' | 'company'
+  name: text('name').notNull(), // שם המזמין או שם החברה המזמינה
+  phone: text('phone').notNull(),
+  email: text('email'),
+  company_number: text('company_number'), // ח.פ — חובה לחברה (9 ספרות), ריק ללקוח פרטי
+  // שיוך: קייטרינג, חנות שבת או שניהם (לפחות אחד, נאכף במסד)
+  is_catering: boolean('is_catering').notNull().default(false),
+  is_shabbat: boolean('is_shabbat').notNull().default(false),
+  created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+})
+
 export const orders = pgTable('orders', {
   id: uuid('id').primaryKey().defaultRandom(),
   client_name: text('client_name').notNull(),
+  // 'restrict': לקוח עם הזמנות לא נמחק, כדי שההיסטוריה שלו תישאר שלמה
+  customer_id: uuid('customer_id').references(() => customers.id, { onDelete: 'restrict' }),
+  // null = טרם נבחר (הזמנות שנוצרו לפני שהשדה נוסף)
+  issues_receipt: boolean('issues_receipt'),
   event_date: date('event_date').notNull(),
   status: text('status').notNull().default('Draft'),
   portions: integer('portions').notNull().default(10),
