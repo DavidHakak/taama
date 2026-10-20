@@ -10,6 +10,7 @@ import {
   Calendar,
   Printer,
   Edit2,
+  Eye,
   Trash2,
   Loader2,
   AlertCircle,
@@ -332,18 +333,14 @@ export default function OrdersPage() {
                       className="hover:bg-zinc-900/20 transition-colors"
                     >
                       <td className="py-5 px-6">
-                        {order.status === "Paid" ? (
-                          <span className="font-bold text-zinc-400 block cursor-default">
-                            {order.client_name}
-                          </span>
-                        ) : (
-                          <Link
-                            href={`/orders/${order.id}`}
-                            className="font-bold text-zinc-100 hover:text-amber-400 transition-colors block"
-                          >
-                            {order.client_name}
-                          </Link>
-                        )}
+                        <Link
+                          href={`/orders/${order.id}`}
+                          className={`font-bold hover:text-amber-400 transition-colors block ${
+                            order.status === "Paid" ? "text-zinc-400" : "text-zinc-100"
+                          }`}
+                        >
+                          {order.client_name}
+                        </Link>
                         {(order.customers || order.issues_receipt !== null) && (
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
                             {order.customers &&
@@ -455,15 +452,18 @@ export default function OrdersPage() {
                         >
                           <Printer className="h-4 w-4" />
                         </Link>
-                        {order.status !== "Paid" && (
-                          <Link
-                            href={`/orders/${order.id}`}
-                            className="inline-flex p-2 bg-zinc-900 hover:bg-amber-500/10 text-zinc-400 hover:text-amber-400 rounded-lg transition-all"
-                            title="ערוך אירוע"
-                          >
+                        {/* אירוע ששולם נעול לעריכה, ונפתח לצפייה בלבד */}
+                        <Link
+                          href={`/orders/${order.id}`}
+                          className="inline-flex p-2 bg-zinc-900 hover:bg-amber-500/10 text-zinc-400 hover:text-amber-400 rounded-lg transition-all"
+                          title={order.status === "Paid" ? "צפייה באירוע" : "ערוך אירוע"}
+                        >
+                          {order.status === "Paid" ? (
+                            <Eye className="h-4 w-4" />
+                          ) : (
                             <Edit2 className="h-4 w-4" />
-                          </Link>
-                        )}
+                          )}
+                        </Link>
                         <button
                           onClick={() => handleDeleteOrder(order.id)}
                           className="inline-flex p-2 bg-zinc-900 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 rounded-lg transition-all cursor-pointer"

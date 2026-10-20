@@ -394,7 +394,7 @@ export default function CustomersBook({ segment }: CustomersBookProps) {
                               {c.orders.map((o) => (
                                 <Link
                                   key={o.id}
-                                  href={o.status === 'Paid' ? `/orders/${o.id}/print` : `/orders/${o.id}`}
+                                  href={`/orders/${o.id}`}
                                   className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 rounded-lg border border-zinc-900 bg-zinc-950 hover:border-zinc-800 hover:bg-zinc-900/40 transition-all"
                                 >
                                   <span className="text-xs font-bold text-zinc-200 flex-1 min-w-[140px]">{o.client_name}</span>

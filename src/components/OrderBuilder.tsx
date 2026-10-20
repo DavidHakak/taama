@@ -1006,16 +1006,20 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
         <div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center gap-2.5 justify-start">
             <ClipboardList className="h-8 w-8 text-amber-500" />
-            {orderId ? 'עריכת הזמנת אירוע' : 'הזמנת קייטרינג חדשה'}
+            {isLocked ? 'צפייה בהזמנת אירוע' : orderId ? 'עריכת הזמנת אירוע' : 'הזמנת קייטרינג חדשה'}
           </h1>
-          <p className="text-zinc-400 text-sm mt-1">הגדר פרטי אירוע, הוסף מנות וסקור כמויות רכש מרוכזות.</p>
+          <p className="text-zinc-400 text-sm mt-1">
+            {isLocked
+              ? 'פרטי האירוע, המנות וכמויות הרכש, לצפייה בלבד.'
+              : 'הגדר פרטי אירוע, הוסף מנות וסקור כמויות רכש מרוכזות.'}
+          </p>
         </div>
       </div>
 
       {isLocked && (
         <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl flex items-center gap-3 text-right">
           <AlertCircle className="h-5 w-5 shrink-0" />
-          <p className="text-xs font-semibold">אירוע זה שולם ונעול לעריכה. לא ניתן לבצע שינויים.</p>
+          <p className="text-xs font-semibold">אירוע זה שולם ונעול לעריכה ומוצג לצפייה בלבד. ניתן לעדכן רק את העלות בפועל.</p>
         </div>
       )}
 
@@ -1921,9 +1925,11 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                               {canTrackPurchases ? (
                                 <button
                                   type="button"
-                                  disabled={saving || purchaseSavingId !== null}
+                                  disabled={isLocked || saving || purchaseSavingId !== null}
                                   onClick={() => togglePurchased(item.ingredientId, !isPurchased)}
-                                  className="w-full p-3 pb-2 flex items-center gap-3 text-right cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                                  className={`w-full p-3 pb-2 flex items-center gap-3 text-right cursor-pointer disabled:cursor-not-allowed ${
+                                    isLocked ? '' : 'disabled:opacity-60'
+                                  }`}
                                 >
                                   {row}
                                 </button>
