@@ -30,6 +30,21 @@ export const dishIngredients = pgTable('dish_ingredients', {
   quantity: numeric('quantity', { precision: 10, scale: 3 }).notNull().default('0.000'),
 })
 
+// מנה מורכבת (למשל שולחן שוק): תתי-מנות רגילות, כל אחת עם מספר מנות בכל מנה של ההורה.
+// תת-מנה יכולה להיות מורכבת בעצמה (לחמניית שניצל › לחמניות ביס), עד MAX_COMPONENT_DEPTH רמות
+// (src/utils/costing.ts). לולאות נחסמות במסך המנות.
+export const dishComponents = pgTable('dish_components', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  dish_id: uuid('dish_id')
+    .references(() => dishes.id, { onDelete: 'cascade' })
+    .notNull(),
+  // 'restrict': תת-מנה שבשימוש לא נמחקת, כדי שהמנה המורכבת לא תשתנה בשקט
+  component_dish_id: uuid('component_dish_id')
+    .references(() => dishes.id, { onDelete: 'restrict' })
+    .notNull(),
+  quantity: numeric('quantity', { precision: 10, scale: 3 }).notNull().default('1.000'),
+})
+
 // ספר הלקוחות של הקייטרינג ושל חנות השבת
 // (נפרד מ-profiles, שבה נמצאים המשתמשים הרשומים באתר)
 export const customers = pgTable('customers', {
