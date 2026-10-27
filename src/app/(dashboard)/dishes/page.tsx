@@ -18,8 +18,10 @@ import {
   Sparkles,
   Search,
   BookOpen,
+  Layers,
 } from 'lucide-react'
 import { CustomSelect } from '@/components/ui/CustomSelect'
+import { DISH_COMPONENTS_SELECT, dishCostPerPortion, isCompositeDish, MAX_COMPONENT_DEPTH } from '@/utils/costing'
 import {
   DEFAULT_DISH_CATEGORIES,
   DEFAULT_INGREDIENT_CATEGORIES,
@@ -47,16 +49,33 @@ interface DishIngredient {
   ingredients?: Ingredient // nested from Supabase
 }
 
+interface DishComponent {
+  quantity: number // מנות מתת-המנה בכל מנה של ההורה (בשולחן שוק: לכל סועד)
+  component: {
+    id: string
+    name: string
+    category?: string | null
+    dish_ingredients: DishIngredient[]
+    dish_components?: DishComponent[]
+  } | null
+}
+
 interface Dish {
   id: string
   name: string
   category?: string
   is_menu_item: boolean
   dish_ingredients: DishIngredient[]
+  dish_components?: DishComponent[]
 }
 
 interface TempLineItem {
   ingredientId: string
+  quantity: string // string for input binding
+}
+
+interface TempComponentItem {
+  dishId: string
   quantity: string // string for input binding
 }
 
@@ -119,6 +138,7 @@ export default function DishesPage() {
   const [dishCategory, setDishCategory] = useState('')
   const [dishOnMenu, setDishOnMenu] = useState(true)
   const [lineItems, setLineItems] = useState<TempLineItem[]>([])
+  const [componentItems, setComponentItems] = useState<TempComponentItem[]>([])
   const [formSubmitting, setFormSubmitting] = useState(false)
 
   // The dish whose menu switch is being saved right now
@@ -146,6 +166,11 @@ export default function DishesPage() {
     }))
     
     setLineItems(initialLines.length > 0 ? initialLines : [{ ingredientId: '', quantity: '1' }])
+    setComponentItems(
+      (dish.dish_components || [])
+        .filter((dc) => dc.component)
+        .map((dc) => ({ dishId: dc.component!.id, quantity: dc.quantity.toString() }))
+    )
     setIsModalOpen(true)
   }
 
@@ -172,7 +197,8 @@ export default function DishesPage() {
               unit,
               cost_per_unit
             )
-          )
+          ),
+          ${DISH_COMPONENTS_SELECT}
         `)
         .order('name', { ascending: true })
 
@@ -212,24 +238,63 @@ export default function DishesPage() {
     fetchData()
   }, [supabase])
 
-  // Helper to calculate total single portion cost of a dish
-  const calculateDishCost = (dish: Dish) => {
-    return dish.dish_ingredients?.reduce((sum, di) => {
-      const cost = Number(di.ingredients?.cost_per_unit || 0)
-      const qty = Number(di.quantity || 0)
-      return sum + cost * qty
-    }, 0) || 0
-  }
-
   // Helper to calculate the current form's dynamic cost
   const calculateCurrentFormCost = () => {
-    return lineItems.reduce((sum, item) => {
+    const ingredientsCost = lineItems.reduce((sum, item) => {
       if (!item.ingredientId) return sum
       const ing = allIngredients.find((i) => i.id === item.ingredientId)
       const cost = ing ? Number(ing.cost_per_unit) : 0
       const qty = parseFloat(item.quantity) || 0
       return sum + cost * qty
     }, 0)
+    const componentsCost = componentItems.reduce((sum, item) => {
+      const componentDish = dishes.find((d) => d.id === item.dishId)
+      return sum + dishCostPerPortion(componentDish) * (parseFloat(item.quantity) || 0)
+    }, 0)
+    return ingredientsCost + componentsCost
+  }
+
+  // Composites that use this dish as a direct sub-dish
+  const parentsOf = (dishId: string) =>
+    dishes.filter((d) => d.dish_components?.some((dc) => dc.component?.id === dishId))
+
+  const childIdsOf = (dishId: string) =>
+    dishes.find((d) => d.id === dishId)?.dish_components?.flatMap((dc) => (dc.component ? [dc.component.id] : [])) || []
+
+  // Levels of sub-dishes under a dish (0 for a plain recipe) and of composites above it.
+  // The depth argument only stops a loop in the data from recursing forever.
+  const levelsBelow = (dishId: string, depth = 0): number => {
+    const children = childIdsOf(dishId)
+    if (children.length === 0 || depth > MAX_COMPONENT_DEPTH) return 0
+    return 1 + Math.max(...children.map((id) => levelsBelow(id, depth + 1)))
+  }
+  const levelsAbove = (dishId: string, depth = 0): number => {
+    const parents = parentsOf(dishId)
+    if (parents.length === 0 || depth > MAX_COMPONENT_DEPTH) return 0
+    return 1 + Math.max(...parents.map((p) => levelsAbove(p.id, depth + 1)))
+  }
+
+  // Every composite that holds the dish, directly or through other sub-dishes
+  const ancestorIdsOf = (dishId: string) => {
+    const found = new Set<string>()
+    const visit = (id: string) =>
+      parentsOf(id).forEach((p) => {
+        if (found.has(p.id)) return
+        found.add(p.id)
+        visit(p.id)
+      })
+    visit(dishId)
+    return found
+  }
+
+  // Whether a dish can be a sub-dish of the one being edited: no loops (a dish inside
+  // itself), and the whole chain stays within MAX_COMPONENT_DEPTH levels
+  const canBeSubDish = (candidateId: string) => {
+    const editedId = selectedDish?.id
+    if (candidateId === editedId) return false
+    if (editedId && ancestorIdsOf(editedId).has(candidateId)) return false
+    const above = editedId ? levelsAbove(editedId) : 0
+    return above + 1 + levelsBelow(candidateId) <= MAX_COMPONENT_DEPTH
   }
 
   // Open Builder for Create
@@ -240,6 +305,7 @@ export default function DishesPage() {
     setDishCategory('')
     setDishOnMenu(true)
     setLineItems([{ ingredientId: '', quantity: '1' }])
+    setComponentItems([])
     setActiveDropdown(null)
     setIsModalOpen(true)
   }
@@ -264,6 +330,19 @@ export default function DishesPage() {
     setLineItems(newLines)
   }
 
+  // Sub-dish rows of a composite dish (e.g. שולחן שוק)
+  const addComponentItem = () => {
+    setComponentItems([...componentItems, { dishId: '', quantity: '1' }])
+  }
+
+  const removeComponentItem = (index: number) => {
+    setComponentItems(componentItems.filter((_, i) => i !== index))
+  }
+
+  const updateComponentItem = (index: number, field: keyof TempComponentItem, value: string) => {
+    setComponentItems(componentItems.map((item, i) => (i === index ? { ...item, [field]: value } : item)))
+  }
+
   // Submit recipe build
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -277,8 +356,21 @@ export default function DishesPage() {
     }
 
     const validLines = lineItems.filter((line) => line.ingredientId && parseFloat(line.quantity) > 0)
-    if (validLines.length === 0) {
-      setError('יש להוסיף לפחות רכיב אחד עם כמות חיובית')
+    const validComponents = componentItems.filter((item) => item.dishId && parseFloat(item.quantity) > 0)
+    if (validLines.length === 0 && validComponents.length === 0) {
+      setError('יש להוסיף לפחות רכיב אחד או תת-מנה אחת עם כמות חיובית')
+      setFormSubmitting(false)
+      return
+    }
+
+    // בלי לולאות (מנה שמכילה את עצמה) ועד MAX_COMPONENT_DEPTH רמות של תתי-מנות
+    const blocked = validComponents
+      .filter((item) => !canBeSubDish(item.dishId))
+      .map((item) => dishes.find((d) => d.id === item.dishId)?.name || item.dishId)
+    if (blocked.length > 0) {
+      setError(
+        `לא ניתן להוסיף את ${blocked.join(', ')} כתת-מנה: זה יוצר מנה שמכילה את עצמה, או יותר מ-${MAX_COMPONENT_DEPTH} רמות של תתי-מנות`
+      )
       setFormSubmitting(false)
       return
     }
@@ -310,6 +402,13 @@ export default function DishesPage() {
           .eq('dish_id', dishId)
 
         if (deleteError) throw deleteError
+
+        const { error: deleteComponentsError } = await supabase
+          .from('dish_components')
+          .delete()
+          .eq('dish_id', dishId)
+
+        if (deleteComponentsError) throw deleteComponentsError
       }
 
       // Map lines to database schema
@@ -320,11 +419,27 @@ export default function DishesPage() {
       }))
 
       // Insert new ingredient mappings
-      const { error: mappingError } = await supabase
-        .from('dish_ingredients')
-        .insert(mappedIngredients)
+      if (mappedIngredients.length > 0) {
+        const { error: mappingError } = await supabase
+          .from('dish_ingredients')
+          .insert(mappedIngredients)
 
-      if (mappingError) throw mappingError
+        if (mappingError) throw mappingError
+      }
+
+      if (validComponents.length > 0) {
+        const { error: componentsError } = await supabase
+          .from('dish_components')
+          .insert(
+            validComponents.map((item) => ({
+              dish_id: dishId!,
+              component_dish_id: item.dishId,
+              quantity: parseFloat(item.quantity),
+            }))
+          )
+
+        if (componentsError) throw componentsError
+      }
 
       setIsModalOpen(false)
       fetchData()
@@ -339,6 +454,15 @@ export default function DishesPage() {
 
   // Handle Delete Dish
   const handleDeleteDish = (id: string) => {
+    const parents = parentsOf(id)
+    if (parents.length > 0) {
+      showAlert(
+        `המנה הזו היא חלק מ-${parents.map((d) => d.name).join(', ')}. הסר אותה משם קודם.`,
+        'לא ניתן למחוק',
+        'error'
+      )
+      return
+    }
     showConfirm(
       'האם אתה בטוח שברצונך למחוק מנה זו? היא תמחק גם מכל האירועים המשויכים אליה.',
       async () => {
@@ -404,7 +528,15 @@ export default function DishesPage() {
   const filteredDishes = dishes.filter((dish) => {
     if (!normalizedSearch) return true
     if (dish.name.toLowerCase().includes(normalizedSearch)) return true
-    return dish.dish_ingredients?.some((di) => isMatchingIngredient(di.ingredients?.name)) ?? false
+    if (dish.dish_ingredients?.some((di) => isMatchingIngredient(di.ingredients?.name))) return true
+    // A composite also matches through its sub-dishes and their ingredients
+    return (
+      dish.dish_components?.some(
+        (dc) =>
+          isMatchingIngredient(dc.component?.name) ||
+          dc.component?.dish_ingredients?.some((di) => isMatchingIngredient(di.ingredients?.name))
+      ) ?? false
+    )
   })
 
   // Grouping dishes by whatever categories the dishes themselves use
@@ -504,8 +636,9 @@ export default function DishesPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {categoryDishes.map((dish) => {
-                    const cost = calculateDishCost(dish)
+                    const cost = dishCostPerPortion(dish)
                     const ingredientCount = dish.dish_ingredients?.length || 0
+                    const componentCount = dish.dish_components?.length || 0
                     const onMenu = isOnMenu(dish)
                     return (
                       <div
@@ -517,9 +650,16 @@ export default function DishesPage() {
                         <div>
                           <div className="flex items-start justify-between gap-4 mb-3">
                             <h3 className="text-lg font-bold text-white leading-tight truncate">{dish.name}</h3>
-                            <span className="shrink-0 inline-flex items-center px-2 py-0.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xxs font-extrabold text-zinc-400">
-                              {ingredientCount} רכיבים
-                            </span>
+                            {isCompositeDish(dish) ? (
+                              <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-xxs font-extrabold text-amber-400">
+                                <Layers className="h-3 w-3" />
+                                {componentCount} תתי-מנות
+                              </span>
+                            ) : (
+                              <span className="shrink-0 inline-flex items-center px-2 py-0.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xxs font-extrabold text-zinc-400">
+                                {ingredientCount} רכיבים
+                              </span>
+                            )}
                           </div>
 
                           {/* Client menu switch — dishes in "אחר" are always off the menu */}
@@ -538,6 +678,23 @@ export default function DishesPage() {
 
                           {/* Summary of ingredients */}
                           <div className="text-xs text-zinc-400 space-y-1 mt-4 border-t border-b border-zinc-900/50 py-3 mb-4 max-h-36 overflow-y-auto">
+                            {dish.dish_components?.map((dc) => {
+                              if (!dc.component) return null
+                              const matched =
+                                isMatchingIngredient(dc.component.name) ||
+                                (dc.component.dish_ingredients?.some((di) => isMatchingIngredient(di.ingredients?.name)) ?? false)
+                              return (
+                                <div
+                                  key={dc.component.id}
+                                  className={`flex justify-between ${matched ? 'text-amber-400 font-bold' : 'text-zinc-300'}`}
+                                >
+                                  <span className="truncate">{dc.component.name}</span>
+                                  <span className={`shrink-0 font-mono pl-2 ${matched ? 'text-amber-400' : 'text-zinc-400'}`}>
+                                    {dc.quantity} למנה
+                                  </span>
+                                </div>
+                              )
+                            })}
                             {dish.dish_ingredients?.map((di) => {
                               const matched = isMatchingIngredient(di.ingredients?.name)
                               return (
@@ -833,6 +990,101 @@ export default function DishesPage() {
                   })}
                 </div>
               </div>
+
+              {/* Sub-dishes: makes this a composite dish (e.g. שולחן שוק) */}
+              {(() => {
+                return (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                        תתי-מנות (כמות למנה)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={addComponentItem}
+                        disabled={formSubmitting}
+                        className="inline-flex items-center gap-1 text-xs font-bold text-amber-500 hover:text-amber-400 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        <PlusCircle className="h-4 w-4" />
+                        הוסף תת-מנה
+                      </button>
+                    </div>
+                    <p className="text-xs text-zinc-500 mb-3">
+                      למנה שמורכבת ממנות או ממתכוני בסיס אחרים. הכמות היא כמה מנות מתת-המנה בכל מנה של המנה הזו.
+                      בשולחן שוק מנה = סועד, כך ש-0.8 = 40 מנות ל-50 איש. בלחמניית שניצל, 1 = לחמנייה אחת לכל כריך.
+                    </p>
+
+                    <div className="space-y-3">
+                      {componentItems.map((item, idx) => {
+                        const componentDish = dishes.find((d) => d.id === item.dishId)
+                        const rowCost = dishCostPerPortion(componentDish) * (parseFloat(item.quantity) || 0)
+                        const options = dishes
+                          .filter(
+                            (d) =>
+                              (d.id === item.dishId || canBeSubDish(d.id)) &&
+                              !componentItems.some((c, ci) => ci !== idx && c.dishId === d.id)
+                          )
+                          .map((d) => ({
+                            value: d.id,
+                            label: d.name,
+                            category: normalizeCategory(d.category),
+                            subText: `₪${dishCostPerPortion(d).toFixed(2)} / מנה`,
+                          }))
+
+                        return (
+                          <div
+                            key={idx}
+                            className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-3.5 bg-zinc-900/30 border border-zinc-800/50 hover:bg-zinc-900/40 hover:border-zinc-800/80 rounded-xl transition-all duration-200"
+                          >
+                            <div className="flex-1 min-w-[220px]">
+                              <CustomSelect
+                                options={options}
+                                value={item.dishId}
+                                onChange={(value) => updateComponentItem(idx, 'dishId', value)}
+                                placeholder="בחר מנה..."
+                                searchPlaceholder="חפש מנה..."
+                                groupByCategory
+                                categoriesOrder={DEFAULT_DISH_CATEGORIES}
+                                disabled={formSubmitting}
+                              />
+                            </div>
+
+                            <div className="w-full sm:w-28 flex items-center bg-zinc-950 border border-zinc-900 rounded-lg px-2 shrink-0">
+                              <input
+                                type="number"
+                                step="0.001"
+                                min="0.001"
+                                placeholder="כמות"
+                                value={item.quantity}
+                                disabled={formSubmitting}
+                                onChange={(e) => updateComponentItem(idx, 'quantity', e.target.value)}
+                                className="w-full bg-transparent border-none py-2 px-1 text-left text-sm text-white focus:outline-none"
+                              />
+                              <span className="text-zinc-400 text-xs font-semibold mr-1 shrink-0 bg-zinc-900 px-2 py-0.5 rounded-md">
+                                למנה
+                              </span>
+                            </div>
+
+                            <div className="w-24 text-left flex items-center justify-start font-mono text-sm shrink-0">
+                              <span className="text-amber-500/70 text-xs ml-1">₪</span>
+                              <span className="font-bold text-amber-500">{rowCost.toFixed(2)}</span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => removeComponentItem(idx)}
+                              disabled={formSubmitting}
+                              className="p-2 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 rounded-lg transition-all shrink-0 cursor-pointer text-center flex items-center justify-center self-end sm:self-auto disabled:opacity-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
             </form>
 
             {/* Modal Footer (Cost Calculator) */}

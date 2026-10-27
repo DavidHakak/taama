@@ -6,6 +6,8 @@ export interface IngredientDishUsage {
   dishName: string
   dishCategory: string
   quantity: number
+  /** The dish whose recipe holds the ingredient, when it isn't dishId: the sub-dish of a composite. */
+  recipeDishId?: string
 }
 
 export interface AggregatedIngredient {
@@ -64,6 +66,112 @@ export function dishServedPortions(
   return options > 0 ? Math.ceil(padded / options) : padded
 }
 
+/**
+ * How deep sub-dishes may nest: שולחן שוק › לחמניית שניצל › לחמניות ביס is 2 levels.
+ * The nested select below goes this deep, and every expansion stops here too, so
+ * a loop in the data can never recurse forever.
+ */
+export const MAX_COMPONENT_DEPTH = 3
+
+const RECIPE_LINES_SELECT = `
+  dish_ingredients (
+    quantity,
+    ingredients (
+      id,
+      name,
+      unit,
+      category,
+      cost_per_unit
+    )
+  )`
+
+// The FK names are spelled out because dish_components points at dishes twice
+// (the composite and the sub-dish).
+const componentsSelect = (depth: number): string => `
+  dish_components!dish_components_dish_id_fkey (
+    quantity,
+    component:dishes!dish_components_component_dish_id_fkey (
+      id,
+      name,
+      category,
+      ${RECIPE_LINES_SELECT}${depth > 1 ? `,${componentsSelect(depth - 1)}` : ''}
+    )
+  )`
+
+/**
+ * The nested select that brings a dish's sub-dishes along with their recipes (and
+ * their own sub-dishes), for every query that costs or expands an order.
+ */
+export const DISH_COMPONENTS_SELECT = componentsSelect(MAX_COMPONENT_DEPTH)
+
+/** Only the direct sub-dishes' names, for pages that show a composite to the client. */
+export const DISH_COMPONENT_NAMES_SELECT = `
+  dish_components!dish_components_dish_id_fkey (
+    component:dishes!dish_components_component_dish_id_fkey ( name )
+  )`
+
+/** One ingredient line of a recipe, as the nested select returns it. */
+interface RecipeLine {
+  quantity: number | string
+  ingredients?: { id: string; name: string; unit: string; category?: string | null; cost_per_unit: number | string } | null
+}
+
+/** A dish as the nested select returns it: its own recipe plus its sub-dishes, recursively. */
+interface RecipeDish {
+  id?: string
+  name: string
+  category?: string | null
+  dish_ingredients?: RecipeLine[] | null
+  dish_components?: { quantity: number | string; component?: RecipeDish | null }[] | null
+}
+
+interface CostedRecipe {
+  dish_ingredients?: { quantity: number | string; ingredients?: { cost_per_unit: number | string } | null }[] | null
+  dish_components?: { quantity: number | string; component?: CostedRecipe | null }[] | null
+}
+
+/** A dish made of other dishes (e.g. שולחן שוק) rather than only of ingredients. */
+export const isCompositeDish = (dish: { dish_components?: unknown[] | null } | null | undefined) =>
+  (dish?.dish_components?.length ?? 0) > 0
+
+/**
+ * Servings of one sub-dish for a composite served `parentServed` times:
+ * 50 guests × 0.8 per guest → 40 sandwiches. Rounded to the 3 decimals the
+ * quantity is stored with before the ceil, since 50 * 1.1 in floats is 55.000…01.
+ */
+export function componentServings(parentServed: number, perGuest: number | string): number {
+  return Math.ceil(Math.round(parentServed * Number(perGuest || 0) * 1000) / 1000)
+}
+
+const ownRecipeCost = (dish: CostedRecipe | null | undefined) =>
+  dish?.dish_ingredients?.reduce(
+    (sum, di) => sum + Number(di.ingredients?.cost_per_unit || 0) * Number(di.quantity || 0),
+    0
+  ) || 0
+
+/** Cost of one portion (one guest's share) of a dish, sub-dishes included at every level. */
+export function dishCostPerPortion(dish: CostedRecipe | null | undefined, depth = 0): number {
+  if (depth > MAX_COMPONENT_DEPTH) return 0
+  const componentsCost =
+    dish?.dish_components?.reduce(
+      (sum, dc) => sum + dishCostPerPortion(dc.component, depth + 1) * Number(dc.quantity || 0),
+      0
+    ) || 0
+  return ownRecipeCost(dish) + componentsCost
+}
+
+/** Cost of making `servedPortions` of a dish, with each sub-dish rounded up to whole servings. */
+export function dishCostForPortions(dish: CostedRecipe | null | undefined, servedPortions: number, depth = 0): number {
+  if (depth > MAX_COMPONENT_DEPTH) return 0
+  const componentsCost =
+    dish?.dish_components?.reduce(
+      (sum, dc) =>
+        sum + dishCostForPortions(dc.component, componentServings(servedPortions, dc.quantity), depth + 1),
+      0
+    ) || 0
+  return ownRecipeCost(dish) * servedPortions + componentsCost
+}
+
 export function aggregateOrderIngredients(
   orderDishes: any[],
   portions: number,
@@ -74,7 +182,7 @@ export function aggregateOrderIngredients(
 
   const addDishUsage = (
     item: AggregatedIngredient,
-    dish: { id?: string; name: string; category?: string | null },
+    dish: { id?: string; name: string; category?: string | null; recipeDishId?: string },
     quantity: number
   ) => {
     const dishId = dish.id || dish.name
@@ -82,19 +190,22 @@ export function aggregateOrderIngredients(
     if (existing) {
       existing.quantity += quantity
     } else {
-      item.dishes.push({ dishId, dishName: dish.name, dishCategory: normalizeCategory(dish.category), quantity })
+      item.dishes.push({
+        dishId,
+        dishName: dish.name,
+        dishCategory: normalizeCategory(dish.category),
+        quantity,
+        ...(dish.recipeDishId && { recipeDishId: dish.recipeDishId }),
+      })
     }
   }
 
-  const splitCounts = countSplitCourses((orderDishes || []).map((od) => od.dishes?.category))
-
-  orderDishes?.forEach((od) => {
-    const dish = od.dishes
-    if (!dish) return
-
-    const dishPortions = dishServedPortions(dish.category, portions, splitCounts)
-
-    dish.dish_ingredients?.forEach((di: any) => {
+  const addRecipe = (
+    recipeLines: RecipeLine[] | null | undefined,
+    servings: number,
+    usageDish: { id?: string; name: string; category?: string | null; recipeDishId?: string }
+  ) => {
+    recipeLines?.forEach((di) => {
       const ing = di.ingredients
       if (!ing) return
 
@@ -103,8 +214,8 @@ export function aggregateOrderIngredients(
       const unit = ing.unit
       const costPerUnit = Number(ing.cost_per_unit || 0)
       const qtyPerPortion = Number(di.quantity || 0)
-      
-      const totalQty = qtyPerPortion * dishPortions
+
+      const totalQty = qtyPerPortion * servings
       const totalCost = totalQty * costPerUnit
 
       if (!map[ingId]) {
@@ -121,14 +232,47 @@ export function aggregateOrderIngredients(
 
       map[ingId].totalQuantity += totalQty
       map[ingId].totalCost += totalCost
-      addDishUsage(map[ingId], dish, totalQty)
+      addDishUsage(map[ingId], usageDish, totalQty)
       grandTotal += totalCost
     })
+  }
+
+  const splitCounts = countSplitCourses((orderDishes || []).map((od) => od.dishes?.category))
+
+  orderDishes?.forEach((od) => {
+    const dish = od.dishes
+    if (!dish) return
+
+    const dishPortions = dishServedPortions(dish.category, portions, splitCounts)
+
+    addRecipe(dish.dish_ingredients, dishPortions, dish)
+
+    // A composite's sub-dishes are scaled from their parent's servings, level by level,
+    // and credited to "שולחן שוק › לחמניית שניצל › לחמניות ביס" under the top dish's category.
+    const addComponents = (parent: RecipeDish, parentServings: number, pathId: string, pathName: string, depth: number) => {
+      if (depth >= MAX_COMPONENT_DEPTH) return
+      parent.dish_components?.forEach((dc) => {
+        const component = dc.component
+        if (!component) return
+        const servings = componentServings(parentServings, dc.quantity)
+        const id = `${pathId}:${component.id || component.name}`
+        const name = `${pathName} › ${component.name}`
+        addRecipe(component.dish_ingredients, servings, {
+          id,
+          name,
+          category: dish.category,
+          recipeDishId: component.id,
+        })
+        addComponents(component, servings, id, name, depth + 1)
+      })
+    }
+    addComponents(dish, dishPortions, dish.id || dish.name, dish.name, 0)
   })
 
   // Add special automatically calculated ingredients:
   // a) Rolls (לחמניה): their own rule, not the dishes' 12% surplus: 15% more than the guests but
   //    never fewer than 10 extra, rounded up to the nearest 5 (40 guests → 50, 100 guests → 115).
+  //    Only for a meal: an order made only of composite dishes (a market table) gets none.
   // b) Salad 4L Box (קופסת סלט 4 ליטר): For each salad dish, ceil(portions / 50).
   // c) Disposable Tray (מגש חד פעמי): For each dish in category "ראשונות", "תוספות", "עיקריות", "קינוחים", ceil(portions / 50).
 
@@ -136,8 +280,10 @@ export function aggregateOrderIngredients(
   const saladBoxIng = ingredientsCatalog?.find((i) => i.name === 'קופסת סלט 4 ליטר')
   const trayIng = ingredientsCatalog?.find((i) => i.name === 'מגש חד פעמי')
 
+  const hasRegularDish = (orderDishes || []).some((od) => od.dishes && !isCompositeDish(od.dishes))
+
   // Add Rolls
-  if (rollsIng && portions > 0) {
+  if (rollsIng && portions > 0 && hasRegularDish) {
     const rollsExtra = Math.max(10, Math.ceil((portions * 15) / 100))
     const rollsQty = Math.ceil((portions + rollsExtra) / 5) * 5
     const rollsCost = rollsQty * Number(rollsIng.cost_per_unit || 0)

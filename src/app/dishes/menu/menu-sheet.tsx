@@ -7,7 +7,7 @@ const menuFont = Frank_Ruhl_Libre({ subsets: ['hebrew', 'latin'], display: 'swap
 
 export interface MenuSection {
   category: string
-  dishes: { id: string; name: string }[]
+  dishes: { id: string; name: string; includes?: string[] }[]
 }
 
 // How a category reads on the client's menu; anything not listed shows as-is
@@ -130,6 +130,11 @@ export function MenuSheet({ sections }: { sections: MenuSection[] }) {
                               className={`${dishWidth(section.dishes.length)} px-3 text-center text-[17px] print:text-[14px] font-medium leading-snug`}
                             >
                               {dish.name}
+                              {dish.includes && dish.includes.length > 0 && (
+                                <span className="block mt-1 text-[13px] print:text-[11px] font-normal text-black/70">
+                                  {dish.includes.join(' · ')}
+                                </span>
+                              )}
                             </li>
                           ))}
                         </ul>

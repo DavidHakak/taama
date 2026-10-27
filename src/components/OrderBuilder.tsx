@@ -3,7 +3,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
-import { aggregateOrderIngredients, countSplitCourses, dishServedPortions, type AggregatedIngredient } from '@/utils/costing'
+import {
+  aggregateOrderIngredients,
+  componentServings,
+  countSplitCourses,
+  DISH_COMPONENTS_SELECT,
+  dishCostForPortions,
+  dishCostPerPortion,
+  dishServedPortions,
+  isCompositeDish,
+  type AggregatedIngredient,
+} from '@/utils/costing'
 import {
   ClipboardList,
   Calendar,
@@ -39,21 +49,62 @@ import { AnchoredDropdown } from '@/components/ui/AnchoredDropdown'
 import { DEFAULT_DISH_CATEGORIES, DEFAULT_INGREDIENT_CATEGORIES, collectCategories, inCategory, isOnMenu, normalizeCategory } from '@/utils/categories'
 import CustomerFormModal, { CUSTOMER_COLUMNS, CUSTOMER_TYPE_LABELS, type Customer } from '@/components/customers/CustomerFormModal'
 
+interface DishIngredientLine {
+  quantity: number
+  ingredients: {
+    id: string
+    name: string
+    unit: string
+    category?: string | null
+    cost_per_unit: number
+  }
+}
+
+// תתי-המנות של מנה מורכבת (שולחן שוק), עם מספר מנות לכל מנה של ההורה.
+// תת-מנה יכולה להכיל בעצמה תתי-מנות (לחמניית שניצל › לחמניות ביס)
+interface DishComponentLine {
+  quantity: number
+  component: {
+    id: string
+    name: string
+    category: string | null
+    dish_ingredients: DishIngredientLine[]
+    dish_components?: DishComponentLine[]
+  } | null
+}
+
 interface Dish {
   id: string
   name: string
   category: string
   is_menu_item: boolean
-  dish_ingredients: {
-    quantity: number
-    ingredients: {
-      id: string
-      name: string
-      unit: string
-      category?: string | null
-      cost_per_unit: number
-    }
-  }[]
+  dish_ingredients: DishIngredientLine[]
+  dish_components?: DishComponentLine[]
+}
+
+/** Every sub-dish under a composite with the servings to make, nested ones indented. */
+function ComponentServingsList({ components, servings }: { components: DishComponentLine[]; servings: number }) {
+  return (
+    <ul className="space-y-1">
+      {components.map((dc) => {
+        if (!dc.component) return null
+        const componentServingsCount = componentServings(servings, dc.quantity)
+        return (
+          <li key={dc.component.id}>
+            <div className="flex justify-between gap-3 text-xs">
+              <span className="text-zinc-300">{dc.component.name}</span>
+              <span className="font-mono text-zinc-400 shrink-0">{componentServingsCount} מנות</span>
+            </div>
+            {isCompositeDish(dc.component) && (
+              <div className="pr-4 mt-1 border-r border-zinc-800">
+                <ComponentServingsList components={dc.component.dish_components!} servings={componentServingsCount} />
+              </div>
+            )}
+          </li>
+        )
+      })}
+    </ul>
+  )
 }
 
 interface OrderBuilderProps {
@@ -191,7 +242,8 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                 category,
                 cost_per_unit
               )
-            )
+            ),
+            ${DISH_COMPONENTS_SELECT}
           `)
           .order('name', { ascending: true })
 
@@ -1562,19 +1614,15 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                 const renderRow = ({ item, idx }: (typeof rows)[number]) => {
                   // Calculate single line dish plate cost
                   const dishObj = dishesList.find((d) => d.id === item.dishId)
-                  const dishCost = dishObj
-                    ? dishObj.dish_ingredients?.reduce((sum, di) => {
-                      return sum + Number(di.ingredients?.cost_per_unit || 0) * Number(di.quantity || 0)
-                    }, 0) || 0
-                    : 0
+                  const dishCost = dishCostPerPortion(dishObj)
 
                   const rowPortions = dishServedPortions(dishObj?.category, portions || 0, splitCounts)
 
-                  const rowTotalCostScaled = dishCost * rowPortions
+                  const rowTotalCostScaled = dishCostForPortions(dishObj, rowPortions)
 
                   return (
+                    <div key={idx} className="space-y-1.5">
                     <div
-                      key={idx}
                       className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-3.5 bg-zinc-900/30 border border-zinc-800/50 hover:bg-zinc-900/40 hover:border-zinc-800/80 rounded-xl transition-all duration-200"
                     >
                       {/* Dish Selection */}
@@ -1639,9 +1687,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                                         </span>
                                         {catDishes.map((d) => {
                                           const isSelected = d.id === item.dishId
-                                          const cost = d.dish_ingredients?.reduce((sum, di) => {
-                                            return sum + Number(di.ingredients?.cost_per_unit || 0) * Number(di.quantity || 0)
-                                          }, 0) || 0
+                                          const cost = dishCostPerPortion(d)
                                           return (
                                             <button
                                               key={d.id}
@@ -1657,6 +1703,11 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                                             >
                                               <span className="flex items-center gap-1.5 min-w-0">
                                                 <span className="truncate">{d.name}</span>
+                                                {isCompositeDish(d) && (
+                                                  <span className="shrink-0 text-[10px] font-bold text-amber-400/90 border border-amber-500/30 rounded px-1.5">
+                                                    מנה מורכבת
+                                                  </span>
+                                                )}
                                                 {!isOnMenu(d) && (
                                                   <span className="shrink-0 text-[10px] font-bold text-zinc-400 border border-dashed border-zinc-700 rounded px-1.5">
                                                     מחוץ לתפריט
@@ -1697,6 +1748,19 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                           <Trash2 className="h-4 w-4" />
                         </button>
                       )}
+                    </div>
+
+                    {/* מנה מורכבת: כמה מנות מכל תת-מנה, לפי מספר הסועדים */}
+                    {dishObj && isCompositeDish(dishObj) && (
+                      <details className="mx-1 px-3.5 py-2 bg-zinc-900/20 border border-zinc-800/40 rounded-lg">
+                        <summary className="cursor-pointer text-xxs font-bold text-zinc-400 hover:text-zinc-200 select-none">
+                          פירוט {dishObj.dish_components!.length} תתי-מנות ל-{rowPortions} סועדים
+                        </summary>
+                        <div className="mt-2">
+                          <ComponentServingsList components={dishObj.dish_components!} servings={rowPortions} />
+                        </div>
+                      </details>
+                    )}
                     </div>
                   )
                 }
@@ -1957,6 +2021,8 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
               .map((sd) => ({ ...sd, dish: dishesList.find((d) => d.id === sd.dishId) }))
               .filter((x) => x.dish) as (SelectedDishItem & { dish: Dish })[]
 
+            const prepSplitCounts = countSplitCourses(prepDishes.map((x) => x.dish.category))
+
             const totalPrep = prepDishes.length
             const donePrep = prepDishes.filter((x) => x.isPrepared).length
             const pct = totalPrep > 0 ? Math.round((donePrep / totalPrep) * 100) : 0
@@ -2043,8 +2109,21 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                                             x.isPrepared && <Check className="h-3.5 w-3.5 text-white" />
                                           )}
                                         </span>
-                                        <span className={`text-sm font-bold flex-1 ${x.isPrepared ? 'text-emerald-300 line-through decoration-emerald-500/40' : 'text-zinc-200'}`}>
-                                          {x.dish.name}
+                                        <span className="flex-1 min-w-0">
+                                          <span className={`block text-sm font-bold ${x.isPrepared ? 'text-emerald-300 line-through decoration-emerald-500/40' : 'text-zinc-200'}`}>
+                                            {x.dish.name}
+                                          </span>
+                                          {isCompositeDish(x.dish) && (() => {
+                                            const served = dishServedPortions(x.dish.category, portions || 0, prepSplitCounts)
+                                            return (
+                                              <span className="block text-[11px] text-zinc-500 mt-0.5 leading-relaxed">
+                                                {x.dish.dish_components!
+                                                  .filter((dc) => dc.component)
+                                                  .map((dc) => `${dc.component!.name} ${componentServings(served, dc.quantity)}`)
+                                                  .join(' · ')}
+                                              </span>
+                                            )
+                                          })()}
                                         </span>
                                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ${x.isPrepared ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-500 bg-zinc-900'}`}>
                                           {x.isPrepared ? 'הוכן' : 'נשאר'}
@@ -2275,7 +2354,7 @@ export default function OrderBuilder({ orderId }: OrderBuilderProps) {
                   disabled={!!openingDishId}
                   onClick={() => {
                     setOpeningDishId(d.dishId)
-                    router.push(`/dishes?edit=${encodeURIComponent(d.dishId)}`)
+                    router.push(`/dishes?edit=${encodeURIComponent(d.recipeDishId ?? d.dishId)}`)
                   }}
                   className="w-full p-3 rounded-xl border border-zinc-900 bg-zinc-900/20 hover:bg-zinc-900 hover:border-zinc-700 flex items-center gap-3 text-right transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed group"
                 >

@@ -17,6 +17,7 @@ import {
   inCategory,
   isOnMenu,
 } from '@/utils/categories'
+import { DISH_COMPONENT_NAMES_SELECT } from '@/utils/costing'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -27,6 +28,8 @@ interface Dish {
   name: string
   category: string
   is_menu_item: boolean
+  // מנה מורכבת (שולחן שוק): שמות תתי-המנות, בלי כמויות
+  dish_components?: { component: { name: string } | null }[]
 }
 
 interface OrderDish {
@@ -92,11 +95,11 @@ export default function ClientSummaryPage({ params }: PageProps) {
         // Fetch all dishes
         const { data: allDishesData, error: dishesError } = await supabase
           .from('dishes')
-          .select('id, name, category, is_menu_item')
+          .select(`id, name, category, is_menu_item, ${DISH_COMPONENT_NAMES_SELECT}`)
           .order('name', { ascending: true })
 
         if (dishesError) throw dishesError
-        setAllDishes(allDishesData as Dish[] || [])
+        setAllDishes(allDishesData as unknown as Dish[] || [])
 
         const orderData = data as unknown as Order
         setOrder(orderData)
@@ -308,6 +311,7 @@ export default function ClientSummaryPage({ params }: PageProps) {
                     }`}>
                     {catDishes.map((dish) => {
                       const isChecked = isInOrder(dish.id)
+                      const includes = (dish.dish_components || []).flatMap((dc) => (dc.component ? [dc.component.name] : []))
 
                       return (
                         <li
@@ -321,7 +325,14 @@ export default function ClientSummaryPage({ params }: PageProps) {
                           ) : (
                             <span className="h-4.5 w-4.5 rounded border-2 border-black bg-transparent shrink-0" />
                           )}
-                          <span>{dish.name}</span>
+                          <span>
+                            {dish.name}
+                            {includes.length > 0 && (
+                              <span className="block text-[11px] font-semibold opacity-70 leading-snug mt-0.5">
+                                {includes.join(' · ')}
+                              </span>
+                            )}
+                          </span>
                         </li>
                       )
                     })}

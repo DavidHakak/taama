@@ -3,7 +3,7 @@
 import React, { useEffect, useState, use } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
-import { aggregateOrderIngredients, countSplitCourses, dishServedPortions } from '@/utils/costing'
+import { aggregateOrderIngredients, componentServings, countSplitCourses, DISH_COMPONENTS_SELECT, dishServedPortions } from '@/utils/costing'
 import { DEFAULT_INGREDIENT_CATEGORIES, collectCategories, inCategory } from '@/utils/categories'
 import {
   Printer,
@@ -34,10 +34,34 @@ interface DishIngredient {
   ingredients: Ingredient
 }
 
+// תת-מנה יכולה להכיל בעצמה תתי-מנות (שולחן שוק › לחמניית שניצל › לחמניות ביס)
+interface DishComponentLine {
+  quantity: number
+  component: { id: string; name: string; dish_components?: DishComponentLine[] } | null
+}
+
 interface Dish {
   name: string
   category: string
   dish_ingredients: DishIngredient[]
+  dish_components?: DishComponentLine[]
+}
+
+/** The sub-dish rows under a composite, each level indented one step further. */
+function componentRows(components: DishComponentLine[] | undefined, servings: number, level = 1): React.ReactNode[] {
+  return (components || []).flatMap((dc) => {
+    if (!dc.component) return []
+    const count = componentServings(servings, dc.quantity)
+    return [
+      <tr key={`${level}:${dc.component.id}`} className="text-zinc-400 print:text-black">
+        <td className="py-2 pl-6 text-xs" style={{ paddingRight: `${1.5 + level * 1.5}rem` }}>
+          › {dc.component.name}
+        </td>
+        <td className="py-2 px-6 text-left font-mono text-xs">{count} מנות</td>
+      </tr>,
+      ...componentRows(dc.component.dish_components, count, level + 1),
+    ]
+  })
 }
 
 interface OrderDish {
@@ -91,7 +115,8 @@ export default function PrintOrderPage({ params }: PageProps) {
                     category,
                     cost_per_unit
                   )
-                )
+                ),
+                ${DISH_COMPONENTS_SELECT}
               )
             )
           `)
@@ -282,12 +307,16 @@ export default function PrintOrderPage({ params }: PageProps) {
                     const dishPortions = dishServedPortions(od.dishes?.category, order.portions || 0, splitCounts)
 
                     return (
-                      <tr key={idx} className="hover:bg-zinc-900/10">
-                        <td className="py-3.5 px-6 font-bold text-zinc-100 print:text-black">{od.dishes?.name}</td>
-                        <td className="py-3.5 px-6 text-left font-mono font-bold text-zinc-300 print:text-black">
-                          {dishPortions} מנות
-                        </td>
-                      </tr>
+                      <React.Fragment key={idx}>
+                        <tr className="hover:bg-zinc-900/10">
+                          <td className="py-3.5 px-6 font-bold text-zinc-100 print:text-black">{od.dishes?.name}</td>
+                          <td className="py-3.5 px-6 text-left font-mono font-bold text-zinc-300 print:text-black">
+                            {dishPortions} מנות
+                          </td>
+                        </tr>
+                        {/* תתי-המנות של מנה מורכבת, מוזחות מתחת לשורה שלה */}
+                        {componentRows(od.dishes?.dish_components, dishPortions)}
+                      </React.Fragment>
                     )
                   })
                 })()}

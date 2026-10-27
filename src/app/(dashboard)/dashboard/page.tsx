@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
-import { aggregateOrderIngredients, countSplitCourses, dishServedPortions } from '@/utils/costing'
+import { aggregateOrderIngredients, countSplitCourses, DISH_COMPONENTS_SELECT, dishServedPortions } from '@/utils/costing'
 import {
   TrendingUp,
   Beef,
@@ -101,7 +101,8 @@ export default function DashboardPage() {
                     unit,
                     cost_per_unit
                   )
-                )
+                ),
+                ${DISH_COMPONENTS_SELECT}
               )
             )
           `)

@@ -10,10 +10,11 @@ import {
   profiles,
   shopEvents,
   dishIngredients,
+  dishComponents,
   ingredients,
 } from '@/db/schema'
 import { eq, and, or, inArray, sql } from 'drizzle-orm'
-import { aggregateOrderIngredients } from '@/utils/costing'
+import { aggregateOrderIngredients, MAX_COMPONENT_DEPTH } from '@/utils/costing'
 import {
   TrendingUp,
   ShoppingBag,
@@ -81,6 +82,17 @@ export default async function AnalyticsPage() {
     })
     .from(dishIngredients)
     .innerJoin(ingredients, eq(dishIngredients.ingredient_id, ingredients.id))
+
+  // Sub-dishes of composite dishes (שולחן שוק), costed through their own recipes
+  const dbDishComponents = await db
+    .select({
+      dishId: dishComponents.dish_id,
+      componentId: dishComponents.component_dish_id,
+      quantity: dishComponents.quantity,
+      name: dishes.name,
+    })
+    .from(dishComponents)
+    .innerJoin(dishes, eq(dishComponents.component_dish_id, dishes.id))
 
   const dbIngredientsCatalog = await db
     .select({
@@ -175,6 +187,38 @@ export default async function AnalyticsPage() {
     })
   })
 
+  // Group dishComponents by the composite's dishId
+  const dishComponentsByDish: { [dishId: string]: typeof dbDishComponents } = {}
+  dbDishComponents.forEach((dc) => {
+    if (!dishComponentsByDish[dc.dishId]) {
+      dishComponentsByDish[dc.dishId] = []
+    }
+    dishComponentsByDish[dc.dishId].push(dc)
+  })
+
+  // A dish's sub-dishes with their recipes, and theirs in turn, as deep as the app allows
+  interface CostedComponent {
+    quantity: number
+    component: {
+      id: string
+      name: string
+      dish_ingredients: (typeof dishIngredientsMap)[string]
+      dish_components: CostedComponent[]
+    }
+  }
+  const componentsOf = (dishId: string, depth = 0): CostedComponent[] =>
+    depth >= MAX_COMPONENT_DEPTH
+      ? []
+      : (dishComponentsByDish[dishId] || []).map((dc) => ({
+          quantity: Number(dc.quantity),
+          component: {
+            id: dc.componentId,
+            name: dc.name,
+            dish_ingredients: dishIngredientsMap[dc.componentId] || [],
+            dish_components: componentsOf(dc.componentId, depth + 1),
+          },
+        }))
+
   // Group orderDishes by orderId
   const orderDishesMap: { [orderId: string]: any[] } = {}
   dbOrderDishes.forEach((od) => {
@@ -187,6 +231,7 @@ export default async function AnalyticsPage() {
         name: od.name,
         category: od.category,
         dish_ingredients: dishIngredientsMap[od.dishId] || [],
+        dish_components: componentsOf(od.dishId),
       }
     })
   })

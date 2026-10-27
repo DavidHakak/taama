@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
-import { aggregateOrderIngredients } from "@/utils/costing";
+import { aggregateOrderIngredients, DISH_COMPONENTS_SELECT } from "@/utils/costing";
 import {
   ClipboardList,
   Plus,
@@ -107,7 +107,8 @@ export default function OrdersPage() {
                   unit,
                   cost_per_unit
                 )
-              )
+              ),
+              ${DISH_COMPONENTS_SELECT}
             )
           )
         `,

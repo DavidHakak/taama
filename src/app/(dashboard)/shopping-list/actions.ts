@@ -1,10 +1,10 @@
 'use server'
 
 import { db } from '@/db'
-import { orders, orderDishes, dishes, dishIngredients, ingredients, shopEvents, shopOrders, shopOrderItems, shopProducts, shopProductIngredients, shopProductVariants, savedShoppingLists, savedShoppingListItems, profiles } from '@/db/schema'
+import { orders, orderDishes, dishes, dishIngredients, dishComponents, ingredients, shopEvents, shopOrders, shopOrderItems, shopProducts, shopProductIngredients, shopProductVariants, savedShoppingLists, savedShoppingListItems, profiles } from '@/db/schema'
 import { eq, and, gte, lte, inArray, sql, desc } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
-import { countSplitCourses, dishServedPortions } from '@/utils/costing'
+import { componentServings, countSplitCourses, dishServedPortions, MAX_COMPONENT_DEPTH } from '@/utils/costing'
 
 interface UnifiedIngredient {
   id: string
@@ -14,6 +14,66 @@ interface UnifiedIngredient {
   cateringQty: number
   shopQty: number
   totalQty: number
+}
+
+/** Adds one catering order's ingredients to the map, sub-dishes of composite dishes included. */
+async function addCateringOrderIngredients(
+  order: { id: string; portions: number },
+  map: { [id: string]: UnifiedIngredient }
+) {
+  const addQty = (ing: { id: string; name: string; unit: string; category: string }, qty: number) => {
+    if (!map[ing.id]) {
+      map[ing.id] = { id: ing.id, name: ing.name, unit: ing.unit, category: ing.category, cateringQty: 0, shopQty: 0, totalQty: 0 }
+    }
+    map[ing.id].cateringQty += qty
+    map[ing.id].totalQty += qty
+  }
+
+  // A dish's own recipe, then each sub-dish's (שולחן שוק › לחמניית שניצל › לחמניות ביס),
+  // scaled by its servings per parent serving
+  const addDishRecipe = async (dishId: string, servings: number, depth: number) => {
+    const dishIngs = await db
+      .select({
+        id: ingredients.id,
+        name: ingredients.name,
+        unit: ingredients.unit,
+        category: ingredients.category,
+        quantity: dishIngredients.quantity,
+      })
+      .from(dishIngredients)
+      .innerJoin(ingredients, eq(dishIngredients.ingredient_id, ingredients.id))
+      .where(eq(dishIngredients.dish_id, dishId))
+
+    for (const di of dishIngs) {
+      addQty(di, Number(di.quantity) * servings)
+    }
+
+    if (depth >= MAX_COMPONENT_DEPTH) return
+    const components = await db
+      .select({ componentId: dishComponents.component_dish_id, perGuest: dishComponents.quantity })
+      .from(dishComponents)
+      .where(eq(dishComponents.dish_id, dishId))
+
+    for (const c of components) {
+      await addDishRecipe(c.componentId, componentServings(servings, c.perGuest), depth + 1)
+    }
+  }
+
+  const associatedDishes = await db
+    .select({
+      dishId: orderDishes.dish_id,
+      category: dishes.category,
+    })
+    .from(orderDishes)
+    .innerJoin(dishes, eq(orderDishes.dish_id, dishes.id))
+    .where(eq(orderDishes.order_id, order.id))
+
+  const splitCounts = countSplitCourses(associatedDishes.map(d => d.category))
+
+  for (const d of associatedDishes) {
+    const portionsCount = dishServedPortions(d.category, order.portions, splitCounts)
+    await addDishRecipe(d.dishId, portionsCount, 0)
+  }
 }
 
 export async function getUnifiedShoppingList(startDateStr: string, endDateStr: string) {
@@ -42,41 +102,7 @@ export async function getUnifiedShoppingList(startDateStr: string, endDateStr: s
 
     // Collect catering order dishes and compute ingredients
     for (const order of cateringOrders) {
-      const associatedDishes = await db
-        .select({
-          dishId: orderDishes.dish_id,
-          category: dishes.category,
-        })
-        .from(orderDishes)
-        .innerJoin(dishes, eq(orderDishes.dish_id, dishes.id))
-        .where(eq(orderDishes.order_id, order.id))
-
-      const splitCounts = countSplitCourses(associatedDishes.map(d => d.category))
-
-      for (const d of associatedDishes) {
-        const portionsCount = dishServedPortions(d.category, order.portions, splitCounts)
-
-        const dishIngs = await db
-          .select({
-            id: ingredients.id,
-            name: ingredients.name,
-            unit: ingredients.unit,
-            category: ingredients.category,
-            quantity: dishIngredients.quantity,
-          })
-          .from(dishIngredients)
-          .innerJoin(ingredients, eq(dishIngredients.ingredient_id, ingredients.id))
-          .where(eq(dishIngredients.dish_id, d.dishId))
-
-        for (const di of dishIngs) {
-          const qty = Number(di.quantity) * portionsCount
-          if (!map[di.id]) {
-            map[di.id] = { id: di.id, name: di.name, unit: di.unit, category: di.category, cateringQty: 0, shopQty: 0, totalQty: 0 }
-          }
-          map[di.id].cateringQty += qty
-          map[di.id].totalQty += qty
-        }
-      }
+      await addCateringOrderIngredients(order, map)
     }
 
     // 2. Fetch Shop Orders for active events in range
@@ -426,41 +452,7 @@ export async function calculateUnifiedShoppingList(cateringOrderIds: string[], s
         .where(inArray(orders.id, cateringOrderIds))
 
       for (const order of cateringOrders) {
-        const associatedDishes = await db
-          .select({
-            dishId: orderDishes.dish_id,
-            category: dishes.category,
-          })
-          .from(orderDishes)
-          .innerJoin(dishes, eq(orderDishes.dish_id, dishes.id))
-          .where(eq(orderDishes.order_id, order.id))
-
-        const splitCounts = countSplitCourses(associatedDishes.map(d => d.category))
-
-        for (const d of associatedDishes) {
-          const portionsCount = dishServedPortions(d.category, order.portions, splitCounts)
-
-          const dishIngs = await db
-            .select({
-              id: ingredients.id,
-              name: ingredients.name,
-              unit: ingredients.unit,
-              category: ingredients.category,
-              quantity: dishIngredients.quantity,
-            })
-            .from(dishIngredients)
-            .innerJoin(ingredients, eq(dishIngredients.ingredient_id, ingredients.id))
-            .where(eq(dishIngredients.dish_id, d.dishId))
-
-          for (const di of dishIngs) {
-            const qty = Number(di.quantity) * portionsCount
-            if (!map[di.id]) {
-              map[di.id] = { id: di.id, name: di.name, unit: di.unit, category: di.category, cateringQty: 0, shopQty: 0, totalQty: 0 }
-            }
-            map[di.id].cateringQty += qty
-            map[di.id].totalQty += qty
-          }
-        }
+        await addCateringOrderIngredients(order, map)
       }
     }
 
